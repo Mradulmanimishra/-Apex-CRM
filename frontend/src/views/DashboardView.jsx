@@ -4,7 +4,7 @@ import {
 } from "recharts";
 import {
   Wallet, Target, TrendingUp, Users, Ticket, ArrowUpRight, ArrowDownRight,
-  Phone, Mail, Calendar, Video, FileText, MessageCircle, AlertCircle, Clock
+  Phone, Mail, Calendar, Video, FileText, MessageCircle, AlertCircle, Clock, Filter
 } from "lucide-react";
 
 const palette = {
@@ -33,20 +33,21 @@ const fmtMoney = (n) => {
 function KpiCard({ label, value, icon: Icon, color, details }) {
   return (
     <div
-      className="flex flex-col gap-3 rounded-2xl p-5 border transition-all duration-300 hover:border-brand-teal/30 hover:translate-y-[-2px]"
-      style={{ background: palette.surface, borderColor: palette.border }}
+      className="flex flex-col gap-3 rounded-2xl p-5 border bg-brand-surface/65 backdrop-blur-md border-brand-border hover:border-brand-teal/30 hover:shadow-[0_0_20px_rgba(45,212,191,0.03)] hover:translate-y-[-2px] transition-all duration-300"
     >
       <div className="flex items-center justify-between">
-        <span className="text-xs uppercase tracking-widest text-brand-textDim" style={{ letterSpacing: "0.12em" }}>
+        <span className="text-[10px] font-bold uppercase tracking-wider text-brand-textDim">
           {label}
         </span>
-        <Icon size={18} style={{ color }} strokeWidth={2} />
+        <div className="rounded-lg p-1.5 bg-brand-surfaceAlt/60 border border-brand-border">
+          <Icon size={16} style={{ color }} strokeWidth={2} />
+        </div>
       </div>
-      <div className="flex items-end justify-between">
-        <span className="text-2xl font-semibold font-mono text-brand-text">
+      <div className="flex items-end justify-between mt-1">
+        <span className="text-2xl font-bold font-mono text-brand-text tracking-tight">
           {value}
         </span>
-        <span className="text-[11px] text-brand-textDim font-medium">
+        <span className="text-[10px] text-brand-textDim font-medium font-mono bg-brand-surfaceAlt px-1.5 py-0.5 rounded border border-brand-border/60">
           {details}
         </span>
       </div>
@@ -59,14 +60,23 @@ export default function DashboardView({ onNavigate }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  useEffect(() => {
-    fetchDashboardData();
-  }, []);
+  // Filters and Interactive Chart Toggles
+  const [selectedOwner, setSelectedOwner] = useState("All");
+  const [showPipeline, setShowPipeline] = useState(true);
+  const [showWon, setShowWon] = useState(true);
 
-  const fetchDashboardData = async () => {
+  // Pre-configured owners list
+  const owners = ["All", "Priya Nair", "Vikram Singh", "Aarav Mehta"];
+
+  useEffect(() => {
+    fetchDashboardData(selectedOwner);
+  }, [selectedOwner]);
+
+  const fetchDashboardData = async (ownerName) => {
     try {
       setLoading(true);
-      const res = await fetch("/api/dashboard");
+      const url = `/api/dashboard?owner=${encodeURIComponent(ownerName)}`;
+      const res = await fetch(url);
       if (!res.ok) throw new Error("Failed to fetch dashboard data");
       const json = await res.json();
       setData(json);
@@ -83,7 +93,7 @@ export default function DashboardView({ onNavigate }) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
         <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-brand-teal"></div>
-        <p className="text-brand-textDim text-sm font-mono">Calibrating sensors...</p>
+        <p className="text-brand-textDim text-sm font-mono tracking-wide">Synthesizing command metrics...</p>
       </div>
     );
   }
@@ -95,10 +105,10 @@ export default function DashboardView({ onNavigate }) {
         <p className="text-brand-text font-medium text-lg">Error loading telemetry</p>
         <p className="text-brand-textDim text-sm">{error}</p>
         <button 
-          onClick={fetchDashboardData}
+          onClick={() => fetchDashboardData(selectedOwner)}
           className="mt-4 px-4 py-2 bg-brand-surface border border-brand-border rounded-lg text-xs text-brand-teal hover:border-brand-teal font-mono transition-colors"
         >
-          RETRY LINK
+          RETRY SYSTEM LINK
         </button>
       </div>
     );
@@ -109,31 +119,52 @@ export default function DashboardView({ onNavigate }) {
 
   const kpis = [
     { label: "Open Pipeline Value", value: fmtMoney(metrics.openPipelineValue), icon: Wallet, color: palette.accent, details: "Active pipeline" },
-    { label: "Weighted Open Pipeline", value: fmtMoney(metrics.weightedOpenPipeline), icon: TrendingUp, color: palette.accent2, details: "Probability adjusted" },
-    { label: "Win Rate", value: metrics.winRate, icon: Target, color: palette.accent, details: `Won vs Lost deals` },
-    { label: "Active Customers", value: metrics.activeCustomers.toString(), icon: Users, color: palette.accent2, details: "With active status" },
-    { label: "Open Tickets", value: metrics.openTickets.toString().padStart(2, '0'), icon: Ticket, color: palette.warn, details: "Requires action" },
+    { label: "Weighted Open Pipeline", value: fmtMoney(metrics.weightedOpenPipeline), icon: TrendingUp, color: palette.accent2, details: "Risk adjusted" },
+    { label: "Win Rate", value: metrics.winRate, icon: Target, color: palette.accent, details: `${metrics.wonCount} won / ${metrics.lostCount} lost` },
+    { label: "Active Customers", value: metrics.activeCustomers.toString(), icon: Users, color: palette.accent2, details: "Total active" },
+    { label: "Open Tickets", value: metrics.openTickets.toString().padStart(2, '0'), icon: Ticket, color: palette.warn, details: "Pending action" },
   ];
 
   const todayStr = new Date().toISOString().split('T')[0];
 
   return (
     <div className="space-y-8 animate-fadeIn">
-      {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-4">
+      {/* Header toolbar */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-brand-border/60 pb-6">
         <div>
           <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-brand-text font-space">
             Revenue Command Center
           </h1>
-          <p className="text-sm mt-1 text-brand-textDim">
-            Pipeline, accounts &amp; activity — updated continuously
+          <p className="text-xs mt-1 text-brand-textDim">
+            Pipeline velocity, accounts health &amp; upcoming items
           </p>
         </div>
-        <div className="flex items-center gap-2 rounded-full px-4 py-2 border border-brand-border bg-brand-surface">
-          <span className="pulse-dot inline-block w-2 h-2 rounded-full bg-brand-teal" />
-          <span className="text-xs font-semibold font-mono text-brand-textDim">
-            LIVE SYSTEM · ONLINE
-          </span>
+        
+        {/* Advanced Filters */}
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Owner filter dropdown */}
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-brand-border bg-brand-surfaceAlt/60">
+            <Filter size={12} className="text-brand-teal" />
+            <span className="text-[10px] font-mono text-brand-textDim uppercase">Owner:</span>
+            <select
+              value={selectedOwner}
+              onChange={(e) => setSelectedOwner(e.target.value)}
+              className="bg-transparent text-xs text-brand-text font-semibold border-none outline-none focus:ring-0 cursor-pointer pr-4"
+            >
+              {owners.map(owner => (
+                <option key={owner} value={owner} className="bg-brand-surface text-brand-text">
+                  {owner === "All" ? "All Owners" : owner}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex items-center gap-2 rounded-xl px-4 py-2 border border-brand-border bg-brand-surfaceAlt/30">
+            <span className="pulse-dot inline-block w-2 h-2 rounded-full bg-brand-teal" />
+            <span className="text-[10px] font-bold font-mono text-brand-textDim tracking-wider">
+              ONLINE
+            </span>
+          </div>
         </div>
       </div>
 
@@ -147,18 +178,18 @@ export default function DashboardView({ onNavigate }) {
       {/* Funnel + Trend */}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
         {/* Funnel */}
-        <div className="lg:col-span-2 rounded-2xl p-6 border border-brand-border bg-brand-surface flex flex-col justify-between">
+        <div className="lg:col-span-2 rounded-2xl p-6 border border-brand-border bg-brand-surface/65 backdrop-blur-md flex flex-col justify-between hover:border-brand-teal/20 transition-all duration-300">
           <div>
-            <h2 className="text-sm font-semibold mb-5 tracking-wide text-brand-text font-space">
-              Pipeline by Stage
+            <h2 className="text-xs font-bold mb-5 uppercase tracking-wider text-brand-textDim font-space">
+              Pipeline Funnel Distribution
             </h2>
             <div className="flex flex-col gap-4">
               {funnel.map((f, i) => {
-                const widthPct = maxFunnelValue > 0 ? (f.value / maxFunnelValue) * 85 + 15 : 15;
+                const widthPct = maxFunnelValue > 0 ? (f.value / maxFunnelValue) * 82 + 18 : 18;
                 return (
                   <div key={f.stage} className="flex items-center gap-3">
-                    <span className="w-24 text-xs shrink-0 text-brand-textDim truncate">{f.stage}</span>
-                    <div className="flex-1 h-7 rounded-lg overflow-hidden bg-brand-surfaceAlt">
+                    <span className="w-24 text-xs shrink-0 text-brand-textDim truncate font-medium">{f.stage}</span>
+                    <div className="flex-1 h-7 rounded-lg overflow-hidden bg-brand-surfaceAlt/60 border border-brand-border/40">
                       <div
                         className="h-full rounded-lg flex items-center justify-end px-3 transition-all duration-1000"
                         style={{
@@ -166,8 +197,8 @@ export default function DashboardView({ onNavigate }) {
                           background: f.stage === "Won"
                             ? `linear-gradient(90deg, ${palette.accent2}, ${palette.accent})`
                             : f.stage === "Lost"
-                            ? `linear-gradient(90deg, #4b5563, #374151)`
-                            : `linear-gradient(90deg, ${palette.accent2}55, ${palette.accent2}aa)`,
+                            ? `linear-gradient(90deg, #374151, #1f2937)`
+                            : `linear-gradient(90deg, ${palette.accent2}33, ${palette.accent2}aa)`,
                         }}
                       >
                         <span className="text-[10px] font-bold font-mono text-brand-bg">
@@ -175,7 +206,7 @@ export default function DashboardView({ onNavigate }) {
                         </span>
                       </div>
                     </div>
-                    <span className="w-16 text-right text-xs font-mono text-brand-textDim shrink-0">
+                    <span className="w-16 text-right text-xs font-mono text-brand-textDim shrink-0 font-medium">
                       {fmtMoney(f.value)}
                     </span>
                   </div>
@@ -183,23 +214,41 @@ export default function DashboardView({ onNavigate }) {
               })}
             </div>
           </div>
-          <div className="mt-4 pt-4 border-t border-brand-border flex items-center justify-between text-xs text-brand-textDim">
-            <span>Total Won Pipeline:</span>
-            <span className="font-mono text-brand-teal font-semibold">{fmtMoney(metrics.totalWonValue)}</span>
+          <div className="mt-6 pt-4 border-t border-brand-border flex items-center justify-between text-xs text-brand-textDim">
+            <span>Total Closed-Won Revenue:</span>
+            <span className="font-mono text-brand-teal font-bold text-sm">{fmtMoney(metrics.totalWonValue)}</span>
           </div>
         </div>
 
         {/* Revenue trend */}
-        <div className="lg:col-span-3 rounded-2xl p-6 border border-brand-border bg-brand-surface">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-sm font-semibold tracking-wide text-brand-text font-space">
-              Pipeline &amp; Won Revenue Trend
+        <div className="lg:col-span-3 rounded-2xl p-6 border border-brand-border bg-brand-surface/65 backdrop-blur-md hover:border-brand-teal/20 transition-all duration-300">
+          <div className="flex flex-wrap items-center justify-between gap-4 mb-5">
+            <h2 className="text-xs font-bold uppercase tracking-wider text-brand-textDim font-space">
+              Revenue and Forecasting Trend
             </h2>
-            <div className="flex items-center gap-4 text-xs text-brand-textDim">
-              <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full inline-block bg-brand-indigo" />Pipeline</span>
-              <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full inline-block bg-brand-teal" />Won</span>
+            {/* Interactive chart legend toggles */}
+            <div className="flex items-center gap-2">
+              <button 
+                onClick={() => setShowPipeline(!showPipeline)} 
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-full border text-[10px] transition-all font-mono font-semibold ${
+                  showPipeline ? 'bg-[#818CF8]/15 text-[#818CF8] border-[#818CF8]/30' : 'bg-transparent text-brand-textDim border-brand-border'
+                }`}
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-brand-indigo" /> 
+                Pipeline {showPipeline ? 'ON' : 'OFF'}
+              </button>
+              <button 
+                onClick={() => setShowWon(!showWon)} 
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-full border text-[10px] transition-all font-mono font-semibold ${
+                  showWon ? 'bg-[#2DD4BF]/15 text-[#2DD4BF] border-[#2DD4BF]/30' : 'bg-transparent text-brand-textDim border-brand-border'
+                }`}
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-brand-teal" /> 
+                Won {showWon ? 'ON' : 'OFF'}
+              </button>
             </div>
           </div>
+          
           <div style={{ height: 230 }}>
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={revenueTrend} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
@@ -214,7 +263,7 @@ export default function DashboardView({ onNavigate }) {
                   </linearGradient>
                 </defs>
                 <CartesianGrid stroke={palette.border} strokeDasharray="3 6" vertical={false} />
-                <XAxis dataKey="month" tick={{ fill: palette.textDim, fontSize: 12, fontFamily: "Inter" }} axisLine={{ stroke: palette.border }} tickLine={false} />
+                <XAxis dataKey="month" tick={{ fill: palette.textDim, fontSize: 11, fontFamily: "Inter" }} axisLine={{ stroke: palette.border }} tickLine={false} />
                 <YAxis tick={{ fill: palette.textDim, fontSize: 11, fontFamily: "JetBrains Mono" }} axisLine={false} tickLine={false} tickFormatter={fmtMoney} width={52} />
                 <Tooltip
                   formatter={(v) => fmtMoney(v)}
@@ -222,8 +271,12 @@ export default function DashboardView({ onNavigate }) {
                   labelStyle={{ color: palette.text }}
                   itemStyle={{ color: palette.text }}
                 />
-                <Area type="monotone" dataKey="pipeline" stroke={palette.accent2} fill="url(#pipeGrad)" strokeWidth={2} />
-                <Area type="monotone" dataKey="won" stroke={palette.accent} fill="url(#wonGrad)" strokeWidth={2} />
+                {showPipeline && (
+                  <Area type="monotone" dataKey="pipeline" stroke={palette.accent2} fill="url(#pipeGrad)" strokeWidth={2} />
+                )}
+                {showWon && (
+                  <Area type="monotone" dataKey="won" stroke={palette.accent} fill="url(#wonGrad)" strokeWidth={2} />
+                )}
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -233,26 +286,21 @@ export default function DashboardView({ onNavigate }) {
       {/* Activity feed + Support Tickets */}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
         {/* Activity feed / Followups */}
-        <div className="lg:col-span-3 rounded-2xl p-6 border border-brand-border bg-brand-surface">
+        <div className="lg:col-span-3 rounded-2xl p-6 border border-brand-border bg-brand-surface/65 backdrop-blur-md hover:border-brand-teal/20 transition-all duration-300">
           <div className="flex items-center justify-between mb-5">
-            <h2 className="text-sm font-semibold tracking-wide text-brand-text font-space">
-              Upcoming Follow-ups (7 Days)
+            <h2 className="text-xs font-bold uppercase tracking-wider text-brand-textDim font-space">
+              Planned Follow-ups ({selectedOwner === 'All' ? 'All Owners' : selectedOwner})
             </h2>
             <button 
               onClick={() => onNavigate('activities')}
               className="text-xs text-brand-teal hover:underline font-mono"
             >
-              VIEW ALL LOGS
+              VIEW ALL TIMELINES
             </button>
           </div>
           <div className="flex flex-col gap-4 max-h-[300px] overflow-y-auto pr-1">
-            {upcomingFollowups && upcomingFollowups.filter(a => {
-              if (!a.next_action_date) return false;
-              // include overdue or next 7 days
-              return true;
-            }).length > 0 ? (
+            {upcomingFollowups && upcomingFollowups.length > 0 ? (
               upcomingFollowups
-                .filter(a => a.next_action_date)
                 .map((a, i) => {
                   const Icon = activityIcons[a.type] || FileText;
                   const isOverdue = a.next_action_date < todayStr;
@@ -280,7 +328,7 @@ export default function DashboardView({ onNavigate }) {
                           )}
                         </div>
                         <p className="text-xs mt-1 text-brand-text">{a.next_action || 'No Action Defined'}</p>
-                        <p className="text-[10px] mt-0.5 text-brand-textDim italic">Last Note: "{a.notes}"</p>
+                        <p className="text-[10px] mt-0.5 text-brand-textDim italic">Notes: "{a.notes}"</p>
                       </div>
                       <div className="text-right shrink-0 mt-1 flex flex-col items-end gap-1">
                         <span className="text-[10px] font-mono text-brand-textDim bg-brand-surfaceAlt px-2 py-0.5 rounded border border-brand-border flex items-center gap-1">
@@ -292,26 +340,26 @@ export default function DashboardView({ onNavigate }) {
                   );
                 })
             ) : (
-              <div className="flex flex-col items-center justify-center py-10 text-brand-textDim">
+              <div className="flex flex-col items-center justify-center py-12 text-brand-textDim">
                 <Clock size={32} className="mb-2 text-brand-border" />
-                <p className="text-xs font-mono">No upcoming tasks scheduled</p>
+                <p className="text-xs font-mono">No follow-ups scheduled for selection</p>
               </div>
             )}
           </div>
         </div>
 
         {/* Ticket priorities */}
-        <div className="lg:col-span-2 rounded-2xl p-6 border border-brand-border bg-brand-surface flex flex-col justify-between">
+        <div className="lg:col-span-2 rounded-2xl p-6 border border-brand-border bg-brand-surface/65 backdrop-blur-md flex flex-col justify-between hover:border-brand-teal/20 transition-all duration-300">
           <div>
             <div className="flex items-center justify-between mb-5">
-              <h2 className="text-sm font-semibold tracking-wide text-brand-text font-space">
-                Support Tickets by Priority
+              <h2 className="text-xs font-bold uppercase tracking-wider text-brand-textDim font-space">
+                Ticket Priorities Queue
               </h2>
               <button 
                 onClick={() => onNavigate('tickets')}
                 className="text-xs text-brand-teal hover:underline font-mono"
               >
-                TICKETS QUEUE
+                VIEW CASES
               </button>
             </div>
             
@@ -326,9 +374,9 @@ export default function DashboardView({ onNavigate }) {
                 const pct = (p.count / total) * 100;
                 
                 return (
-                  <div key={p.name} className={`p-3 rounded-xl border ${p.bg} flex items-center justify-between`}>
+                  <div key={p.name} className={`p-3 rounded-xl border ${p.bg} flex items-center justify-between hover:scale-[1.02] transition-transform`}>
                     <div className="flex items-center gap-2">
-                      <span className="w-2 h-2 rounded-full" style={{ background: p.color }} />
+                      <span className="w-2 h-2 rounded-full animate-ping" style={{ background: p.color }} />
                       <span className="text-xs font-semibold text-brand-text">{p.name} Priority</span>
                     </div>
                     <div className="flex items-center gap-3">
@@ -343,7 +391,7 @@ export default function DashboardView({ onNavigate }) {
             </div>
           </div>
           <div className="mt-4 pt-4 border-t border-brand-border text-center text-xs text-brand-textDim font-mono">
-            Requires attention: {Object.values(ticketPriorities).reduce((a, b) => a + b, 0)} open cases
+            {Object.values(ticketPriorities).reduce((a, b) => a + b, 0)} pending support cases
           </div>
         </div>
       </div>

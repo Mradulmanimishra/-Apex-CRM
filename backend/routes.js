@@ -7,18 +7,25 @@ const db = require('./database');
 // ==========================================
 router.get('/dashboard', async (req, res) => {
   try {
+    const { owner } = req.query;
     const today = new Date().toISOString().split('T')[0];
-    const sevenDaysFromNow = new Date();
-    sevenDaysFromNow.setDate(sevenDaysFromNow.getDate() + 7);
-    const maxDate = sevenDaysFromNow.toISOString().split('T')[0];
+
+    // Build SQL condition for owner
+    let dealFilter = '';
+    let dealParams = [];
+    if (owner && owner !== 'All' && owner !== '') {
+      dealFilter = 'WHERE owner = ?';
+      dealParams = [owner];
+    }
 
     // Pipeline by stage
     const stages = ['New Lead', 'Qualified', 'Proposal Sent', 'Negotiation', 'Won', 'Lost'];
     const dealStats = await db.all(`
       SELECT stage, COUNT(*) as count, SUM(value) as total_value, SUM(value * probability) as weighted_value
       FROM deals
+      ${dealFilter}
       GROUP BY stage
-    `);
+    `, dealParams);
 
     // Map database output to match all standard stages
     const funnel = stages.map(stage => {
@@ -40,36 +47,66 @@ router.get('/dashboard', async (req, res) => {
         SUM(CASE WHEN stage = 'Lost' THEN 1 ELSE 0 END) as lost_count,
         SUM(CASE WHEN stage = 'Won' THEN value ELSE 0 END) as won_value
       FROM deals
-    `);
+      ${dealFilter}
+    `, dealParams);
 
     const wonCount = keyMetricsRow.won_count || 0;
     const lostCount = keyMetricsRow.lost_count || 0;
     const totalClosed = wonCount + lostCount;
     const winRate = totalClosed > 0 ? ((wonCount / totalClosed) * 100).toFixed(1) : "0.0";
 
-    // Active customers (Contacts with status = 'Active Customer')
-    const activeCustomersRow = await db.get("SELECT COUNT(*) as count FROM contacts WHERE status = 'Active Customer'");
+    // Active customers
+    let activeCustomersQuery = "SELECT COUNT(*) as count FROM contacts WHERE status = 'Active Customer'";
+    let activeCustomersParams = [];
+    if (owner && owner !== 'All' && owner !== '') {
+      activeCustomersQuery = `
+        SELECT COUNT(DISTINCT c.id) as count 
+        FROM contacts c
+        LEFT JOIN companies comp ON c.company_id = comp.id
+        WHERE c.status = 'Active Customer' AND comp.account_owner = ?
+      `;
+      activeCustomersParams = [owner];
+    }
+    const activeCustomersRow = await db.get(activeCustomersQuery, activeCustomersParams);
 
-    // Open tickets (status != 'Resolved' AND status != 'Closed')
-    const openTicketsRow = await db.get("SELECT COUNT(*) as count FROM tickets WHERE status NOT IN ('Resolved', 'Closed')");
+    // Open tickets
+    let openTicketsQuery = "SELECT COUNT(*) as count FROM tickets WHERE status NOT IN ('Resolved', 'Closed')";
+    let openTicketsParams = [];
+    if (owner && owner !== 'All' && owner !== '') {
+      openTicketsQuery = "SELECT COUNT(*) as count FROM tickets WHERE status NOT IN ('Resolved', 'Closed') AND assigned_to = ?";
+      openTicketsParams = [owner];
+    }
+    const openTicketsRow = await db.get(openTicketsQuery, openTicketsParams);
 
-    // Upcoming followups (next_action_date is populated, not null, sorted soonest first)
-    const upcomingFollowups = await db.all(`
+    // Upcoming followups
+    let upcomingQuery = `
       SELECT a.*, c.name as contact_name, comp.company_name
       FROM activities a
       LEFT JOIN contacts c ON a.contact_id = c.id
       LEFT JOIN companies comp ON c.company_id = comp.id
       WHERE a.next_action_date IS NOT NULL AND a.next_action_date != ''
-      ORDER BY a.next_action_date ASC
-    `);
+    `;
+    let upcomingParams = [];
+    if (owner && owner !== 'All' && owner !== '') {
+      upcomingQuery += ` AND comp.account_owner = ?`;
+      upcomingParams = [owner];
+    }
+    upcomingQuery += ` ORDER BY a.next_action_date ASC`;
+    const upcomingFollowups = await db.all(upcomingQuery, upcomingParams);
 
     // Open tickets count by priority
-    const ticketPriorityStats = await db.all(`
+    let ticketPriorityQuery = `
       SELECT priority, COUNT(*) as count
       FROM tickets
       WHERE status NOT IN ('Resolved', 'Closed')
-      GROUP BY priority
-    `);
+    `;
+    let ticketPriorityParams = [];
+    if (owner && owner !== 'All' && owner !== '') {
+      ticketPriorityQuery += ` AND assigned_to = ?`;
+      ticketPriorityParams = [owner];
+    }
+    ticketPriorityQuery += ` GROUP BY priority`;
+    const ticketPriorityStats = await db.all(ticketPriorityQuery, ticketPriorityParams);
 
     const ticketPriorities = { Low: 0, Medium: 0, High: 0, Urgent: 0 };
     ticketPriorityStats.forEach(item => {
@@ -78,9 +115,7 @@ router.get('/dashboard', async (req, res) => {
       }
     });
 
-    // Monthly historical trend (simulated or aggregated from won/open deals)
-    // We can return the static trend or build a dynamic one based on expected close dates
-    // For visual excellence and premium feel, let's construct a dynamic one or a clean hybrid.
+    // Monthly historical trend
     const revenueTrend = [
       { month: "Jan", won: 640000, pipeline: 1820000 },
       { month: "Feb", won: 710000, pipeline: 1960000 },
