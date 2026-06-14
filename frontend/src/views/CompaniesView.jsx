@@ -14,14 +14,14 @@ const palette = {
   danger: "#F87171",
 };
 
-export default function CompaniesView() {
+export default function CompaniesView({ initialSearchQuery = "" }) {
   const [companies, setCompanies] = useState([]);
   const [contacts, setContacts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   // Search
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchQuery, setSearchQuery] = useState(initialSearchQuery);
 
   // Modals & form state
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -38,6 +38,10 @@ export default function CompaniesView() {
   useEffect(() => {
     fetchData();
   }, []);
+
+  useEffect(() => {
+    setSearchQuery(initialSearchQuery);
+  }, [initialSearchQuery]);
 
   const fetchData = async () => {
     try {

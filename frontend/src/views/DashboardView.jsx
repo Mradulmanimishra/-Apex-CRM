@@ -59,6 +59,7 @@ export default function DashboardView({ onNavigate }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [simulating, setSimulating] = useState(false);
 
   // Filters and Interactive Chart Toggles
   const [selectedOwner, setSelectedOwner] = useState("All");
@@ -86,6 +87,21 @@ export default function DashboardView({ onNavigate }) {
       setError(err.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleTriggerSimulator = async () => {
+    try {
+      setSimulating(true);
+      const res = await fetch("/api/simulator/whatsapp", { method: "POST" });
+      if (!res.ok) throw new Error("Simulation failed");
+      const json = await res.json();
+      alert(`Simulation Success!\n${json.message}`);
+      fetchDashboardData(selectedOwner);
+    } catch (err) {
+      alert(`Simulation failed: ${err.message}`);
+    } finally {
+      setSimulating(false);
     }
   };
 
@@ -158,6 +174,15 @@ export default function DashboardView({ onNavigate }) {
               ))}
             </select>
           </div>
+          
+          {/* WhatsApp Simulator trigger */}
+          <button
+            onClick={handleTriggerSimulator}
+            disabled={simulating}
+            className="flex items-center gap-1.5 px-3.5 py-1.5 bg-brand-indigo hover:opacity-90 active:scale-[0.98] text-brand-bg font-bold text-xs rounded-xl uppercase tracking-wider transition-all disabled:opacity-50"
+          >
+            {simulating ? "Simulating..." : "Simulate WhatsApp"}
+          </button>
 
           <div className="flex items-center gap-2 rounded-xl px-4 py-2 border border-brand-border bg-brand-surfaceAlt/30">
             <span className="pulse-dot inline-block w-2 h-2 rounded-full bg-brand-teal" />

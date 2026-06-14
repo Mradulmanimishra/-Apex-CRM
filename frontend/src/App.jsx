@@ -1,6 +1,7 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { 
-  LayoutDashboard, Users, Building2, Kanban, CalendarRange, Ticket, Menu, X 
+  LayoutDashboard, Users, Building2, Kanban, CalendarRange, Ticket, Menu, X, LogOut,
+  Search, Bell, Command, AlertCircle, AlertTriangle
 } from "lucide-react";
 import DashboardView from "./views/DashboardView";
 import ContactsView from "./views/ContactsView";
@@ -8,6 +9,7 @@ import CompaniesView from "./views/CompaniesView";
 import PipelineView from "./views/PipelineView";
 import ActivitiesView from "./views/ActivitiesView";
 import TicketsView from "./views/TicketsView";
+import LoginView from "./views/LoginView";
 
 const navItems = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -19,12 +21,127 @@ const navItems = [
 ];
 
 export default function App() {
+  const [token, setToken] = useState(localStorage.getItem("crm-auth-token") || null);
   const [activeTab, setActiveTab] = useState("dashboard");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
+  // Search and notification states
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState({ contacts: [], companies: [], deals: [], tickets: [] });
+  const [searchLoading, setSearchLoading] = useState(false);
+
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [notifications, setNotifications] = useState({ overdueActivities: [], todaysActivities: [], urgentTickets: [] });
+  const [unreadNotificationsCount, setUnreadNotificationsCount] = useState(0);
+
+  // Shared props
+  const [selectedContactId, setSelectedContactId] = useState(null);
+  const [viewSearchQuery, setViewSearchQuery] = useState("");
+
   const handleNavigate = (tabId) => {
+    setSelectedContactId(null);
+    setViewSearchQuery("");
     setActiveTab(tabId);
     setMobileMenuOpen(false);
+    setIsNotificationsOpen(false);
+  };
+
+  const handleLoginSuccess = (userToken) => {
+    localStorage.setItem("crm-auth-token", userToken);
+    setToken(userToken);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem("crm-auth-token");
+    setToken(null);
+  };
+
+  const fetchNotifications = async () => {
+    try {
+      const res = await fetch("/api/notifications");
+      if (res.ok) {
+        const data = await res.json();
+        setNotifications(data);
+        const count = data.overdueActivities.length + data.todaysActivities.length + data.urgentTickets.length;
+        setUnreadNotificationsCount(count);
+      }
+    } catch (err) {
+      console.error("Failed to load notifications", err);
+    }
+  };
+
+  useEffect(() => {
+    if (token) {
+      fetchNotifications();
+      const interval = setInterval(fetchNotifications, 30000);
+      return () => clearInterval(interval);
+    }
+  }, [token]);
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "k") {
+        e.preventDefault();
+        setIsSearchOpen((prev) => !prev);
+      }
+      if (e.key === "Escape") {
+        setIsSearchOpen(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setSearchResults({ contacts: [], companies: [], deals: [], tickets: [] });
+      return;
+    }
+    const delayDebounceFn = setTimeout(async () => {
+      try {
+        setSearchLoading(true);
+        const res = await fetch(`/api/search?q=${encodeURIComponent(searchQuery)}`);
+        if (res.ok) {
+          const data = await res.json();
+          setSearchResults(data);
+        }
+      } catch (err) {
+        console.error("Search failed", err);
+      } finally {
+        setSearchLoading(false);
+      }
+    }, 300);
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [searchQuery]);
+
+  const handleOpenContact = (contactId) => {
+    setSelectedContactId(contactId);
+    setActiveTab("contacts");
+    setIsSearchOpen(false);
+    setIsNotificationsOpen(false);
+  };
+
+  const handleOpenCompany = (companyName) => {
+    setViewSearchQuery(companyName);
+    setActiveTab("companies");
+    setIsSearchOpen(false);
+    setIsNotificationsOpen(false);
+  };
+
+  const handleOpenDeal = (dealName) => {
+    setViewSearchQuery(dealName);
+    setActiveTab("pipeline");
+    setIsSearchOpen(false);
+    setIsNotificationsOpen(false);
+  };
+
+  const handleOpenTicket = (issueType) => {
+    setViewSearchQuery(issueType);
+    setActiveTab("tickets");
+    setIsSearchOpen(false);
+    setIsNotificationsOpen(false);
   };
 
   const renderActiveView = () => {
@@ -32,34 +149,314 @@ export default function App() {
       case "dashboard":
         return <DashboardView onNavigate={handleNavigate} />;
       case "contacts":
-        return <ContactsView />;
+        return <ContactsView initialSelectedContactId={selectedContactId} />;
       case "companies":
-        return <CompaniesView />;
+        return <CompaniesView initialSearchQuery={viewSearchQuery} />;
       case "pipeline":
-        return <PipelineView />;
+        return <PipelineView initialSearchQuery={viewSearchQuery} />;
       case "activities":
         return <ActivitiesView />;
       case "tickets":
-        return <TicketsView />;
+        return <TicketsView initialSearchQuery={viewSearchQuery} />;
       default:
         return <DashboardView onNavigate={handleNavigate} />;
     }
   };
 
+  const renderNotificationsDropdown = (isMobile = false) => {
+    const totalCount = notifications.overdueActivities.length + notifications.todaysActivities.length + notifications.urgentTickets.length;
+    
+    return (
+      <div 
+        className={`absolute right-0 mt-2 w-80 rounded-2xl border border-brand-border bg-brand-surface p-4 shadow-2xl z-50 animate-scaleIn text-xs ${
+          isMobile ? "fixed inset-x-4 top-[57px] w-auto mx-auto" : ""
+        }`}
+      >
+        <div className="flex items-center justify-between pb-2.5 border-b border-brand-border">
+          <h3 className="font-space font-bold tracking-tight text-brand-text">Active Alerts</h3>
+          <span className="px-1.5 py-0.5 rounded-full bg-brand-surfaceAlt text-[9px] font-mono font-semibold text-brand-textDim">
+            {totalCount} Alerts
+          </span>
+        </div>
+
+        <div className="max-h-[300px] overflow-y-auto mt-3 space-y-3.5 divide-y divide-brand-border/40 pr-1">
+          {totalCount === 0 ? (
+            <p className="text-center py-6 text-brand-textDim italic text-[11px]">No active notifications</p>
+          ) : (
+            <>
+              {/* Overdue Activities */}
+              {notifications.overdueActivities.length > 0 && (
+                <div className="space-y-1.5 pt-2 first:pt-0">
+                  <h4 className="text-[10px] uppercase font-mono font-bold text-brand-red flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-brand-red animate-pulse" /> Overdue Tasks
+                  </h4>
+                  {notifications.overdueActivities.map(a => (
+                    <div 
+                      key={a.id} 
+                      onClick={() => handleOpenContact(a.contact_id)}
+                      className="p-2 rounded-xl bg-brand-red/5 border border-brand-red/20 hover:border-brand-red/40 cursor-pointer transition-colors"
+                    >
+                      <p className="font-semibold text-brand-text line-clamp-1">{a.next_action}</p>
+                      <p className="text-[10px] text-brand-textDim mt-0.5 flex justify-between">
+                        <span>Partner: {a.contact_name || "Individual"}</span>
+                        <span className="font-mono text-brand-red font-semibold">{a.next_action_date}</span>
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Today's Activities */}
+              {notifications.todaysActivities.length > 0 && (
+                <div className="space-y-1.5 pt-2">
+                  <h4 className="text-[10px] uppercase font-mono font-bold text-brand-orange flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-brand-orange animate-pulse" /> Due Today
+                  </h4>
+                  {notifications.todaysActivities.map(a => (
+                    <div 
+                      key={a.id}
+                      onClick={() => handleOpenContact(a.contact_id)}
+                      className="p-2 rounded-xl bg-brand-orange/5 border border-brand-orange/20 hover:border-brand-orange/40 cursor-pointer transition-colors"
+                    >
+                      <p className="font-semibold text-brand-text line-clamp-1">{a.next_action}</p>
+                      <p className="text-[10px] text-brand-textDim mt-0.5 flex justify-between">
+                        <span>Partner: {a.contact_name || "Individual"}</span>
+                        <span className="font-mono text-brand-orange font-semibold">Today</span>
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Urgent/High Tickets */}
+              {notifications.urgentTickets.length > 0 && (
+                <div className="space-y-1.5 pt-2">
+                  <h4 className="text-[10px] uppercase font-mono font-bold text-brand-indigo flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-brand-indigo animate-pulse" /> Support Escalations
+                  </h4>
+                  {notifications.urgentTickets.map(t => (
+                    <div 
+                      key={t.id}
+                      onClick={() => handleOpenTicket(t.issue_type)}
+                      className="p-2 rounded-xl bg-brand-indigo/5 border border-brand-indigo/20 hover:border-brand-indigo/40 cursor-pointer transition-colors"
+                    >
+                      <p className="font-semibold text-brand-text line-clamp-1">{t.issue_type}: {t.description}</p>
+                      <p className="text-[10px] text-brand-textDim mt-0.5 flex justify-between">
+                        <span>Contact: {t.contact_name || "Individual"}</span>
+                        <span className="font-mono text-brand-red uppercase font-semibold">{t.priority}</span>
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  const renderSearchModal = () => {
+    if (!isSearchOpen) return null;
+
+    return (
+      <div 
+        className="fixed inset-0 z-50 flex items-start justify-center bg-brand-bg/85 backdrop-blur-sm p-4 pt-[10vh]"
+        onClick={() => setIsSearchOpen(false)}
+      >
+        <div 
+          className="w-full max-w-2xl rounded-3xl border border-brand-border bg-[#121829]/95 p-6 shadow-2xl relative space-y-4 animate-scaleIn"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Search Header */}
+          <div className="flex items-center gap-3 pb-3 border-b border-brand-border">
+            <Search size={18} className="text-brand-teal" />
+            <input
+              type="text"
+              autoFocus
+              placeholder="Search across contacts, companies, deals, tickets..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="flex-1 bg-transparent text-sm text-brand-text placeholder-brand-textDim/40 focus:outline-none"
+            />
+            <span className="text-[10px] font-mono text-brand-textDim border border-brand-border px-2 py-0.5 rounded-lg">
+              ESC
+            </span>
+          </div>
+
+          {/* Search Loading or Results */}
+          <div className="max-h-[60vh] overflow-y-auto pr-1">
+            {searchLoading ? (
+              <div className="flex items-center justify-center py-12 gap-2 text-brand-textDim font-mono">
+                <span className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-brand-teal"></span>
+                <span>Searching relational databases...</span>
+              </div>
+            ) : !searchQuery.trim() ? (
+              <div className="py-12 text-center text-brand-textDim/50 space-y-2">
+                <Command size={32} className="mx-auto text-brand-textDim/20" />
+                <p className="text-xs font-mono">Type query or keywords to execute global scan</p>
+                <p className="text-[10px] text-brand-textDim/40">Try searching: "Aarav", "Nimbus", "Urgent", or "Sales"</p>
+              </div>
+            ) : Object.values(searchResults).every(arr => arr.length === 0) ? (
+              <div className="py-12 text-center text-brand-textDim/50 font-mono text-xs">
+                ❌ No matching records found for "{searchQuery}"
+              </div>
+            ) : (
+              <div className="space-y-5 text-xs">
+                
+                {/* Contacts Group */}
+                {searchResults.contacts.length > 0 && (
+                  <div className="space-y-1.5">
+                    <h3 className="text-[10px] font-bold uppercase tracking-wider text-brand-teal font-mono">Contacts</h3>
+                    <div className="divide-y divide-brand-border/30 border border-brand-border/50 rounded-xl overflow-hidden bg-brand-surfaceAlt/30">
+                      {searchResults.contacts.map(c => (
+                        <div
+                          key={c.id}
+                          onClick={() => handleOpenContact(c.id)}
+                          className="p-3 hover:bg-brand-surfaceAlt/60 cursor-pointer flex items-center justify-between transition-colors"
+                        >
+                          <div>
+                            <p className="font-semibold text-brand-text">{c.name}</p>
+                            <p className="text-[10px] text-brand-textDim mt-0.5">{c.role_title} • {c.company_name || "Individual"}</p>
+                          </div>
+                          <span className="text-[10px] text-brand-textDim font-mono">{c.email}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Companies Group */}
+                {searchResults.companies.length > 0 && (
+                  <div className="space-y-1.5">
+                    <h3 className="text-[10px] font-bold uppercase tracking-wider text-brand-indigo font-mono">Companies</h3>
+                    <div className="divide-y divide-brand-border/30 border border-brand-border/50 rounded-xl overflow-hidden bg-brand-surfaceAlt/30">
+                      {searchResults.companies.map(c => (
+                        <div
+                          key={c.id}
+                          onClick={() => handleOpenCompany(c.company_name)}
+                          className="p-3 hover:bg-brand-surfaceAlt/60 cursor-pointer flex items-center justify-between transition-colors"
+                        >
+                          <div>
+                            <p className="font-semibold text-brand-text">{c.company_name}</p>
+                            <p className="text-[10px] text-brand-textDim mt-0.5">Industry: {c.industry || "Not set"}</p>
+                          </div>
+                          <span className="text-[10px] text-brand-textDim">Owner: {c.account_owner || "Unassigned"}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Deals Group */}
+                {searchResults.deals.length > 0 && (
+                  <div className="space-y-1.5">
+                    <h3 className="text-[10px] font-bold uppercase tracking-wider text-brand-orange font-mono">Deals</h3>
+                    <div className="divide-y divide-brand-border/30 border border-brand-border/50 rounded-xl overflow-hidden bg-brand-surfaceAlt/30">
+                      {searchResults.deals.map(d => (
+                        <div
+                          key={d.id}
+                          onClick={() => handleOpenDeal(d.deal_name)}
+                          className="p-3 hover:bg-brand-surfaceAlt/60 cursor-pointer flex items-center justify-between transition-colors"
+                        >
+                          <div>
+                            <p className="font-semibold text-brand-text">{d.deal_name}</p>
+                            <p className="text-[10px] text-brand-textDim mt-0.5">Stage: {d.stage} • Company: {d.company_name || "Individual"}</p>
+                          </div>
+                          <span className="font-bold text-brand-teal font-mono">${d.value.toLocaleString()}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Tickets Group */}
+                {searchResults.tickets.length > 0 && (
+                  <div className="space-y-1.5">
+                    <h3 className="text-[10px] font-bold uppercase tracking-wider text-brand-indigo font-mono">Support Tickets</h3>
+                    <div className="divide-y divide-brand-border/30 border border-brand-border/50 rounded-xl overflow-hidden bg-brand-surfaceAlt/30">
+                      {searchResults.tickets.map(t => (
+                        <div
+                          key={t.id}
+                          onClick={() => handleOpenTicket(t.issue_type)}
+                          className="p-3 hover:bg-brand-surfaceAlt/60 cursor-pointer flex items-center justify-between transition-colors"
+                        >
+                          <div>
+                            <p className="font-semibold text-brand-text">{t.issue_type}</p>
+                            <p className="text-[10px] text-brand-textDim mt-0.5 line-clamp-1">{t.description}</p>
+                          </div>
+                          <div className="text-right">
+                            <span className="text-[9px] font-bold text-brand-red font-mono uppercase bg-brand-red/10 border border-brand-red/20 px-1.5 py-0.5 rounded">{t.priority}</span>
+                            <p className="text-[9px] text-brand-textDim mt-1 font-mono">{t.status}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Enforce authentication view
+  if (!token) {
+    return <LoginView onLoginSuccess={handleLoginSuccess} />;
+  }
+
   return (
     <div className="min-h-screen flex flex-col md:flex-row bg-[#0A0E1A] text-[#EAF0FB] font-sans antialiased">
       {/* Mobile Top Navbar Bar */}
-      <div className="md:hidden flex items-center justify-between px-5 py-4 border-b border-[#1F2A40] bg-[#121829]/90 backdrop-blur-md sticky top-0 z-40">
+      <div className="md:hidden flex items-center justify-between px-5 py-4 border-b border-brand-border bg-brand-surface/90 backdrop-blur-md sticky top-0 z-40">
         <div className="flex items-center gap-2">
           <div className="w-2.5 h-2.5 rounded-full bg-[#2DD4BF] pulse-dot" />
           <span className="font-space font-bold tracking-tight text-sm uppercase">Quantum CRM</span>
         </div>
-        <button 
-          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          className="text-[#EAF0FB] hover:text-[#2DD4BF] transition-colors p-1"
-        >
-          {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
-        </button>
+        <div className="flex items-center gap-3">
+          {/* Mobile Search Icon */}
+          <button 
+            onClick={() => setIsSearchOpen(true)}
+            className="text-brand-text hover:text-brand-teal transition-colors p-1"
+            title="Search"
+          >
+            <Search size={18} />
+          </button>
+
+          {/* Mobile Notifications Icon */}
+          <div className="relative">
+            <button 
+              onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
+              className="text-brand-text hover:text-brand-teal transition-colors p-1 relative"
+              title="Notifications"
+            >
+              <Bell size={18} />
+              {unreadNotificationsCount > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-brand-red text-[7px] font-bold text-[#0A0E1A]">
+                  {unreadNotificationsCount}
+                </span>
+              )}
+            </button>
+            {isNotificationsOpen && renderNotificationsDropdown(true)}
+          </div>
+
+          <button 
+            onClick={handleLogout}
+            className="text-brand-red/80 hover:text-brand-red p-1"
+            title="Sign Out"
+          >
+            <LogOut size={18} />
+          </button>
+          <button 
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            className="text-[#EAF0FB] hover:text-[#2DD4BF] transition-colors p-1"
+          >
+            {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
+          </button>
+        </div>
       </div>
 
       {/* Mobile Dropdown Menu Drawer */}
@@ -87,7 +484,7 @@ export default function App() {
       )}
 
       {/* Desktop Navigation Left Sidebar */}
-      <aside className="hidden md:flex flex-col w-64 bg-[#121829] border-r border-[#1F2A40] p-6 space-y-8 shrink-0">
+      <aside className="hidden md:flex flex-col w-64 bg-[#121829] border-r border-[#1F2A40] p-6 space-y-6 shrink-0">
         {/* Logo and Brand Title */}
         <div className="flex items-center gap-2.5 px-2">
           <div className="w-3.5 h-3.5 rounded-full bg-[#2DD4BF] pulse-dot" />
@@ -121,6 +518,15 @@ export default function App() {
           })}
         </nav>
 
+        {/* Sign Out Button */}
+        <button 
+          onClick={handleLogout}
+          className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-semibold text-brand-red/80 hover:text-brand-red hover:bg-brand-red/10 border border-brand-red/20 hover:border-brand-red/35 transition-all text-left"
+        >
+          <LogOut size={16} className="text-brand-red" /> 
+          Sign Out Operator
+        </button>
+
         {/* Bottom Metadata Info */}
         <div className="pt-4 border-t border-[#1F2A40] text-[10px] text-[#7C8AA8] font-mono space-y-1">
           <p>DB: SQLite crm.db</p>
@@ -130,10 +536,47 @@ export default function App() {
 
       {/* Main Content Pane */}
       <main className="flex-1 overflow-y-auto px-5 py-6 md:p-10 max-h-screen">
-        <div className="max-w-6xl mx-auto">
+        <div className="max-w-6xl mx-auto space-y-6">
+          {/* Desktop Top Header Bar */}
+          <div className="hidden md:flex items-center justify-between pb-4 border-b border-brand-border">
+            {/* Search Trigger Button */}
+            <button
+              onClick={() => setIsSearchOpen(true)}
+              className="flex items-center gap-2 px-4 py-2 border border-brand-border bg-brand-surfaceAlt/40 hover:bg-brand-surfaceAlt/80 rounded-xl text-xs text-brand-textDim transition-all min-w-[280px] text-left"
+            >
+              <Search size={14} className="text-brand-teal" />
+              <span>Search directory...</span>
+              <span className="ml-auto font-mono text-[10px] bg-brand-border px-1.5 py-0.5 rounded text-brand-text flex items-center gap-0.5">
+                <Command size={10} />K
+              </span>
+            </button>
+
+            {/* Notification bell */}
+            <div className="relative">
+              <button
+                onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
+                className="relative p-2 border border-brand-border hover:border-brand-teal/40 rounded-xl bg-brand-surfaceAlt/60 hover:bg-brand-surfaceAlt/95 text-brand-text transition-colors"
+                title="Notifications"
+              >
+                <Bell size={16} />
+                {unreadNotificationsCount > 0 && (
+                  <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-brand-red text-[8px] font-bold text-[#0A0E1A] pulse-dot">
+                    {unreadNotificationsCount}
+                  </span>
+                )}
+              </button>
+
+              {/* Notification Dropdown Panel */}
+              {isNotificationsOpen && renderNotificationsDropdown()}
+            </div>
+          </div>
+
           {renderActiveView()}
         </div>
       </main>
+
+      {/* Global Modals */}
+      {renderSearchModal()}
     </div>
   );
 }

@@ -18,7 +18,7 @@ const ISSUE_TYPES = ['Billing', 'Delivery Delay', 'Product Defect', 'Service Iss
 const STATUSES = ['Open', 'In Progress', 'Waiting on Customer', 'Resolved', 'Closed'];
 const PRIORITIES = ['Low', 'Medium', 'High', 'Urgent'];
 
-export default function TicketsView() {
+export default function TicketsView({ initialSearchQuery = "" }) {
   const [tickets, setTickets] = useState([]);
   const [contacts, setContacts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -27,7 +27,7 @@ export default function TicketsView() {
   // Filters
   const [statusFilter, setStatusFilter] = useState("All");
   const [priorityFilter, setPriorityFilter] = useState("All");
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchQuery, setSearchQuery] = useState(initialSearchQuery);
 
   // Modals & Form
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -43,6 +43,10 @@ export default function TicketsView() {
   useEffect(() => {
     fetchData();
   }, []);
+
+  useEffect(() => {
+    setSearchQuery(initialSearchQuery);
+  }, [initialSearchQuery]);
 
   const fetchData = async () => {
     try {

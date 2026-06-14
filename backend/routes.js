@@ -494,4 +494,165 @@ router.delete('/tickets/:id', async (req, res) => {
   }
 });
 
+// ==========================================
+// 7. SIMULATION & AUTHENTICATION API
+// ==========================================
+router.post('/login', (req, res) => {
+  const { username, password } = req.body;
+  if (username === 'admin' && password === 'admin') {
+    res.json({ success: true, token: 'mock-session-jwt-telemetry-token-998877' });
+  } else {
+    res.status(401).json({ success: false, error: 'Invalid username or password' });
+  }
+});
+
+router.post('/simulator/whatsapp', async (req, res) => {
+  try {
+    const mockLeads = [
+      { name: 'Rahul Sharma', email: 'rahul.sharma@gmail.com', phone: '+91 91234 56789', role_title: 'Product Manager', company: 'Sharma Retail Group', notes: 'Inquired about supply chain tracking.' },
+      { name: 'Sarah Connor', email: 'sconnor@atlasmfg.co', phone: '+1 555-9876', role_title: 'Systems Lead', company: 'Atlas Manufacturing', notes: 'Wants integration info.' },
+      { name: 'Kunal Sen', email: 'kunal.sen@coral.in', phone: '+91 98989 89898', role_title: 'CTO', company: 'Coral Logistics Co.', notes: 'Asked about volume licensing.' },
+      { name: 'Elena Petrova', email: 'epetrova@nimbustraders.com', phone: '+7 901 234-5678', role_title: 'Sourcing Manager', company: 'Nimbus Traders Pvt Ltd', notes: 'Sent whatsapp requesting pricing details.' }
+    ];
+
+    // Pick one randomly
+    const lead = mockLeads[Math.floor(Math.random() * mockLeads.length)];
+    
+    // Check if company exists
+    let companyId = null;
+    const company = await db.get("SELECT id FROM companies WHERE company_name = ?", [lead.company]);
+    if (company) {
+      companyId = company.id;
+    }
+
+    // Check if contact exists by name
+    let contact = await db.get("SELECT * FROM contacts WHERE name = ?", [lead.name]);
+    if (!contact) {
+      const contactResult = await db.run(`
+        INSERT INTO contacts (name, email, phone, role_title, company_id, source, status, tags, last_contact_date, notes)
+        VALUES (?, ?, ?, ?, ?, 'WhatsApp', 'Lead', 'Simulated, Tech', ?, ?)
+      `, [lead.name, lead.email, lead.phone, lead.role_title, companyId, new Date().toISOString().split('T')[0], lead.notes]);
+      
+      contact = await db.get("SELECT * FROM contacts WHERE id = ?", [contactResult.lastID]);
+    }
+
+    // Insert WhatsApp message activity
+    await db.run(`
+      INSERT INTO activities (date, type, contact_id, deal_id, notes, next_action, next_action_date)
+      VALUES (?, 'WhatsApp Message', ?, NULL, ?, 'Reply to simulated WhatsApp lead', ?)
+    `, [
+      new Date().toISOString(), 
+      contact.id, 
+      `[SIMULATOR Incoming WhatsApp Message]: "${lead.notes}"`, 
+      new Date(Date.now() + 86400000 * 2).toISOString().split('T')[0] // 2 days from now
+    ]);
+
+    // Update contact's last contact date
+    await db.run("UPDATE contacts SET last_contact_date = ? WHERE id = ?", [new Date().toISOString().split('T')[0], contact.id]);
+
+    res.json({
+      success: true,
+      message: `Simulated incoming message from ${contact.name}`,
+      contact
+    });
+
+  } catch (error) {
+    console.error('WhatsApp simulator error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==========================================
+// 8. GLOBAL SEARCH & NOTIFICATIONS API
+// ==========================================
+router.get('/search', async (req, res) => {
+  const { q } = req.query;
+  if (!q) {
+    return res.json({ contacts: [], companies: [], deals: [], tickets: [] });
+  }
+
+  try {
+    const searchVal = `%${q}%`;
+
+    const contacts = await db.all(`
+      SELECT c.id, c.name, c.role_title, c.email, comp.company_name
+      FROM contacts c
+      LEFT JOIN companies comp ON c.company_id = comp.id
+      WHERE c.name LIKE ? OR c.email LIKE ? OR c.phone LIKE ? OR c.tags LIKE ? OR c.role_title LIKE ?
+      LIMIT 10
+    `, [searchVal, searchVal, searchVal, searchVal, searchVal]);
+
+    const companies = await db.all(`
+      SELECT id, company_name, industry, account_owner
+      FROM companies
+      WHERE company_name LIKE ? OR industry LIKE ? OR account_owner LIKE ?
+      LIMIT 10
+    `, [searchVal, searchVal, searchVal]);
+
+    const deals = await db.all(`
+      SELECT d.id, d.deal_name, d.owner, d.stage, d.value, comp.company_name
+      FROM deals d
+      LEFT JOIN companies comp ON d.company_id = comp.id
+      WHERE d.deal_name LIKE ? OR d.owner LIKE ? OR d.stage LIKE ?
+      LIMIT 10
+    `, [searchVal, searchVal, searchVal]);
+
+    const tickets = await db.all(`
+      SELECT t.id, t.issue_type, t.priority, t.status, t.description, c.name as contact_name
+      FROM tickets t
+      LEFT JOIN contacts c ON t.contact_id = c.id
+      WHERE t.issue_type LIKE ? OR t.description LIKE ? OR t.assigned_to LIKE ?
+      LIMIT 10
+    `, [searchVal, searchVal, searchVal]);
+
+    res.json({ contacts, companies, deals, tickets });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.get('/notifications', async (req, res) => {
+  try {
+    const today = new Date().toISOString().split('T')[0];
+
+    // Overdue tasks
+    const overdueActivities = await db.all(`
+      SELECT a.id, a.type, a.notes, a.next_action, a.next_action_date, a.contact_id, c.name as contact_name
+      FROM activities a
+      LEFT JOIN contacts c ON a.contact_id = c.id
+      WHERE a.next_action_date IS NOT NULL AND a.next_action_date != '' AND a.next_action_date < ?
+      ORDER BY a.next_action_date ASC
+      LIMIT 5
+    `, [today]);
+
+    // Today's tasks
+    const todaysActivities = await db.all(`
+      SELECT a.id, a.type, a.notes, a.next_action, a.next_action_date, a.contact_id, c.name as contact_name
+      FROM activities a
+      LEFT JOIN contacts c ON a.contact_id = c.id
+      WHERE a.next_action_date = ?
+      ORDER BY a.next_action_date ASC
+      LIMIT 5
+    `, [today]);
+
+    // High/Urgent open tickets
+    const urgentTickets = await db.all(`
+      SELECT t.id, t.issue_type, t.priority, t.status, t.description, c.name as contact_name
+      FROM tickets t
+      LEFT JOIN contacts c ON t.contact_id = c.id
+      WHERE t.status NOT IN ('Resolved', 'Closed') AND t.priority IN ('Urgent', 'High')
+      ORDER BY t.opened_date DESC
+      LIMIT 5
+    `);
+
+    res.json({
+      overdueActivities,
+      todaysActivities,
+      urgentTickets
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 module.exports = router;

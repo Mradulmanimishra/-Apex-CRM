@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { 
   Plus, Search, Edit2, Trash2, X, Building, Mail, Phone, Tag, 
-  Layers, CheckCircle, HelpCircle, FileText, AlertCircle, Calendar, PlusCircle
+  Layers, CheckCircle, HelpCircle, FileText, AlertCircle, Calendar, PlusCircle, Download
 } from "lucide-react";
 
 const palette = {
@@ -20,7 +20,7 @@ const palette = {
 const SOURCES = ['Referral', 'Website', 'Cold Outreach', 'Social Media', 'Event/Trade Show', 'Advertisement', 'WhatsApp', 'Other'];
 const STATUSES = ['Lead', 'Qualified', 'Active Customer', 'Inactive', 'Lost'];
 
-export default function ContactsView() {
+export default function ContactsView({ initialSelectedContactId }) {
   const [contacts, setContacts] = useState([]);
   const [companies, setCompanies] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -51,6 +51,12 @@ export default function ContactsView() {
   useEffect(() => {
     fetchData();
   }, []);
+
+  useEffect(() => {
+    if (initialSelectedContactId) {
+      fetchContactDetails(initialSelectedContactId);
+    }
+  }, [initialSelectedContactId]);
 
   const fetchData = async () => {
     try {
@@ -171,6 +177,35 @@ export default function ContactsView() {
     }
   };
 
+  const handleExportCSV = () => {
+    if (filteredContacts.length === 0) return alert("No contact records to export");
+    const headers = ["ID", "Name", "Email", "Phone", "Role Title", "Company", "Source", "Status", "Tags", "Last Contact Date", "Notes"];
+    const rows = filteredContacts.map(c => [
+      c.id,
+      `"${c.name.replace(/"/g, '""')}"`,
+      c.email ? `"${c.email.replace(/"/g, '""')}"` : "",
+      c.phone ? `"${c.phone.replace(/"/g, '""')}"` : "",
+      c.role_title ? `"${c.role_title.replace(/"/g, '""')}"` : "",
+      c.company_name ? `"${c.company_name.replace(/"/g, '""')}"` : "",
+      c.source || "",
+      c.status || "",
+      c.tags ? `"${c.tags.replace(/"/g, '""')}"` : "",
+      c.last_contact_date || "",
+      c.notes ? `"${c.notes.replace(/"/g, '""').replace(/\n/g, ' ')}"` : ""
+    ]);
+
+    const csvContent = "data:text/csv;charset=utf-8," 
+      + [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
+
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `quantum_crm_contacts_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   // Filter logic
   const filteredContacts = contacts.filter(c => {
     const matchesSearch = c.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
@@ -213,12 +248,20 @@ export default function ContactsView() {
           <h1 className="text-2xl font-semibold text-brand-text font-space">Contact Directory</h1>
           <p className="text-xs text-brand-textDim mt-0.5">Manage details and customer relationship structures</p>
         </div>
-        <button 
-          onClick={handleOpenAdd}
-          className="flex items-center gap-1.5 px-4 py-2 bg-brand-teal text-brand-bg font-semibold text-xs rounded-xl hover:opacity-90 transition-opacity"
-        >
-          <Plus size={16} strokeWidth={2.5} /> ADD CONTACT
-        </button>
+        <div className="flex items-center gap-3">
+          <button 
+            onClick={handleExportCSV}
+            className="flex items-center gap-1.5 px-4 py-2 border border-brand-border bg-brand-surfaceAlt/60 text-brand-text font-semibold text-xs rounded-xl hover:border-brand-teal/40 transition-colors"
+          >
+            <Download size={14} /> EXPORT CSV
+          </button>
+          <button 
+            onClick={handleOpenAdd}
+            className="flex items-center gap-1.5 px-4 py-2 bg-brand-teal text-brand-bg font-semibold text-xs rounded-xl hover:opacity-90 transition-opacity"
+          >
+            <Plus size={16} strokeWidth={2.5} /> ADD CONTACT
+          </button>
+        </div>
       </div>
 
       {/* Filter Toolbar */}

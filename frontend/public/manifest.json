@@ -1,0 +1,23 @@
+{
+  "short_name": "Quantum",
+  "name": "Quantum CRM Command Center",
+  "icons": [
+    {
+      "src": "logo_icon.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "logo_icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#0A0E1A",
+  "theme_color": "#121829",
+  "display": "standalone",
+  "orientation": "portrait"
+}

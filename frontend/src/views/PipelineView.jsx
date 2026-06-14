@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Plus, Search, Edit2, Trash2, X, AlertCircle, Kanban, List, User, DollarSign, Calendar, TrendingUp, AlertTriangle } from "lucide-react";
+import { Plus, Search, Edit2, Trash2, X, AlertCircle, Kanban, List, User, DollarSign, Calendar, TrendingUp, AlertTriangle, Download } from "lucide-react";
 
 const palette = {
   bg: "#0A0E1A",
@@ -17,7 +17,7 @@ const palette = {
 const STAGES = ['New Lead', 'Qualified', 'Proposal Sent', 'Negotiation', 'Won', 'Lost'];
 const SOURCES = ['Referral', 'Website', 'Cold Outreach', 'Social Media', 'Event/Trade Show', 'Advertisement', 'WhatsApp', 'Other'];
 
-export default function PipelineView() {
+export default function PipelineView({ initialSearchQuery = "" }) {
   const [deals, setDeals] = useState([]);
   const [contacts, setContacts] = useState([]);
   const [companies, setCompanies] = useState([]);
@@ -26,7 +26,7 @@ export default function PipelineView() {
 
   // View switch: 'kanban' or 'list'
   const [viewMode, setViewMode] = useState("kanban");
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchQuery, setSearchQuery] = useState(initialSearchQuery);
 
   // Modals & Form
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -46,6 +46,10 @@ export default function PipelineView() {
   useEffect(() => {
     fetchData();
   }, []);
+
+  useEffect(() => {
+    setSearchQuery(initialSearchQuery);
+  }, [initialSearchQuery]);
 
   const fetchData = async () => {
     try {
@@ -150,6 +154,35 @@ export default function PipelineView() {
     } catch (err) {
       alert("Save failed: " + err.message);
     }
+  };
+
+  const handleExportCSV = () => {
+    if (filteredDeals.length === 0) return alert("No deal records to export");
+    const headers = ["ID", "Deal Name", "Contact", "Company", "Stage", "Value", "Probability", "Expected Close Date", "Owner", "Source", "Lost Reason"];
+    const rows = filteredDeals.map(d => [
+      d.id,
+      `"${d.deal_name.replace(/"/g, '""')}"`,
+      d.contact_name ? `"${d.contact_name.replace(/"/g, '""')}"` : "",
+      d.company_name ? `"${d.company_name.replace(/"/g, '""')}"` : "",
+      d.stage || "",
+      d.value || 0,
+      d.probability || 0,
+      d.expected_close_date || "",
+      d.owner ? `"${d.owner.replace(/"/g, '""')}"` : "",
+      d.source || "",
+      d.lost_reason ? `"${d.lost_reason.replace(/"/g, '""').replace(/\n/g, ' ')}"` : ""
+    ]);
+
+    const csvContent = "data:text/csv;charset=utf-8," 
+      + [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
+
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `quantum_crm_deals_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   // Drag and Drop handlers
@@ -260,6 +293,12 @@ export default function PipelineView() {
             </button>
           </div>
 
+          <button 
+            onClick={handleExportCSV}
+            className="flex items-center gap-1.5 px-4 py-2 border border-brand-border bg-brand-surfaceAlt/60 text-brand-text font-semibold text-xs rounded-xl hover:border-brand-teal/40 transition-colors"
+          >
+            <Download size={14} /> EXPORT CSV
+          </button>
           <button 
             onClick={handleOpenAdd}
             className="flex items-center gap-1.5 px-4 py-2 bg-brand-teal text-brand-bg font-semibold text-xs rounded-xl hover:opacity-90 transition-opacity"
