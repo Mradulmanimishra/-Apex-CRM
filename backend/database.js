@@ -1,7 +1,24 @@
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
+const crypto = require('crypto');
 
 const dbPath = path.join(__dirname, 'crm.db');
+
+function hashPassword(password) {
+  const salt = crypto.randomBytes(16).toString('hex');
+  const hash = crypto.pbkdf2Sync(password, salt, 1000, 64, 'sha512').toString('hex');
+  return `${salt}:${hash}`;
+}
+
+function verifyPassword(password, storedHash) {
+  try {
+    const [salt, hash] = storedHash.split(':');
+    const checkHash = crypto.pbkdf2Sync(password, salt, 1000, 64, 'sha512').toString('hex');
+    return hash === checkHash;
+  } catch (err) {
+    return false;
+  }
+}
 const db = new sqlite3.Database(dbPath, (err) => {
   if (err) {
     console.error('Database opening error:', err);
@@ -136,6 +153,16 @@ async function initDatabase() {
       )
     `);
 
+    // 6. Create Users table
+    await run(`
+      CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT NOT NULL UNIQUE,
+        password_hash TEXT NOT NULL,
+        role TEXT NOT NULL
+      )
+    `);
+
     console.log('Database tables verified/created successfully.');
 
     // Seed database if empty
@@ -147,6 +174,30 @@ async function initDatabase() {
 }
 
 async function seedDatabase() {
+  // Seed default user accounts if empty
+  const userCount = await get('SELECT COUNT(*) AS count FROM users');
+  if (userCount.count === 0) {
+    console.log('Seeding default user accounts...');
+    const adminHash = hashPassword('admin');
+    const agentHash = hashPassword('agent');
+    const supportHash = hashPassword('support');
+    
+    await run(`
+      INSERT INTO users (username, password_hash, role)
+      VALUES (?, ?, ?), (?, ?, ?), (?, ?, ?)
+    `, [
+      'admin', adminHash, 'Admin',
+      'agent', agentHash, 'Agent',
+      'support', supportHash, 'Support'
+    ]);
+  }
+
+  // Check if we should seed mock data (skip if in production or disabled via config)
+  if (process.env.NODE_ENV === 'production' || process.env.SEED_MOCK_DATA === 'false') {
+    console.log('Production mode or SEED_MOCK_DATA=false. Skipping mock data seeding.');
+    return;
+  }
+
   const companyCount = await get('SELECT COUNT(*) AS count FROM companies');
   if (companyCount.count > 0) {
     console.log('Database already has data. Skipping seed.');
@@ -266,5 +317,6 @@ module.exports = {
   initDatabase,
   run,
   all,
-  get
+  get,
+  verifyPassword
 };

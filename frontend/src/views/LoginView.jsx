@@ -29,7 +29,7 @@ export default function LoginView({ onLoginSuccess }) {
         throw new Error(data.error || "Authentication failed");
       }
 
-      onLoginSuccess(data.token);
+      onLoginSuccess(data);
     } catch (err) {
       console.error(err);
       setError(err.message);
@@ -53,7 +53,7 @@ export default function LoginView({ onLoginSuccess }) {
             <Key size={26} strokeWidth={2} className="animate-pulse" />
           </div>
           <h1 className="text-xl md:text-2xl font-bold tracking-tight font-space text-[#EAF0FB] mt-2">
-            QUANTUM CRM GATEWAY
+            APEX CRM GATEWAY
           </h1>
           <p className="text-xs text-[#7C8AA8] font-mono tracking-wider">
             ENTER CREDENTIALS TO ESTABLISH LINK
@@ -108,9 +108,23 @@ export default function LoginView({ onLoginSuccess }) {
             </div>
           </div>
 
-          {/* Tips block */}
-          <div className="text-[9px] font-mono text-[#7C8AA8]/70 leading-normal bg-[#0E1422]/30 p-2 rounded-lg border border-[#1F2A40]/40">
-            📌 Dev Credential override: Use <span className="text-[#2DD4BF] font-bold">admin</span> / <span className="text-[#2DD4BF] font-bold">admin</span> to authorize locally.
+          {/* Operator Guide Block */}
+          <div className="text-[10px] font-mono text-[#7C8AA8]/80 leading-relaxed bg-[#0E1422]/50 p-3 rounded-xl border border-[#1F2A40] space-y-1.5">
+            <div className="font-bold text-[#2DD4BF] uppercase tracking-wider border-b border-[#1F2A40]/40 pb-1">
+              🔑 System Operators (Pass: username)
+            </div>
+            <div className="flex justify-between items-center text-[9px]">
+              <span>👤 <strong className="text-brand-text">admin</strong></span>
+              <span className="bg-[#2DD4BF]/10 text-[#2DD4BF] border border-[#2DD4BF]/20 px-1.5 py-0.5 rounded text-[8px] font-bold">ADMIN ROLE</span>
+            </div>
+            <div className="flex justify-between items-center text-[9px]">
+              <span>👤 <strong className="text-brand-text">agent</strong></span>
+              <span className="bg-brand-orange/10 text-brand-orange border border-brand-orange/20 px-1.5 py-0.5 rounded text-[8px] font-bold">AGENT ROLE</span>
+            </div>
+            <div className="flex justify-between items-center text-[9px]">
+              <span>👤 <strong className="text-brand-text">support</strong></span>
+              <span className="bg-brand-indigo/10 text-brand-indigo border border-brand-indigo/20 px-1.5 py-0.5 rounded text-[8px] font-bold">SUPPORT ROLE</span>
+            </div>
           </div>
 
           {/* Submit Button */}

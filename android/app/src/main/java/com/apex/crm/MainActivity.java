@@ -1,4 +1,4 @@
-package com.quantum.crm;
+package com.apex.crm;
 
 import com.getcapacitor.BridgeActivity;
 

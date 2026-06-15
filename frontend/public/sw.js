@@ -1,4 +1,4 @@
-const CACHE_NAME = 'quantum-crm-cache-v1';
+const CACHE_NAME = 'apex-crm-cache-v1';
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();

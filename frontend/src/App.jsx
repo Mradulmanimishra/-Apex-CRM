@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { 
   LayoutDashboard, Users, Building2, Kanban, CalendarRange, Ticket, Menu, X, LogOut,
-  Search, Bell, Command, AlertCircle, AlertTriangle
+  Search, Bell, Command, AlertCircle, AlertTriangle, Database, Trash2, Loader2, CheckCircle2, PackagePlus
 } from "lucide-react";
 import DashboardView from "./views/DashboardView";
 import ContactsView from "./views/ContactsView";
@@ -22,6 +22,8 @@ const navItems = [
 
 export default function App() {
   const [token, setToken] = useState(localStorage.getItem("crm-auth-token") || null);
+  const [role, setRole] = useState(localStorage.getItem("crm-auth-role") || null);
+  const [username, setUsername] = useState(localStorage.getItem("crm-auth-username") || null);
   const [activeTab, setActiveTab] = useState("dashboard");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -35,6 +37,12 @@ export default function App() {
   const [notifications, setNotifications] = useState({ overdueActivities: [], todaysActivities: [], urgentTickets: [] });
   const [unreadNotificationsCount, setUnreadNotificationsCount] = useState(0);
 
+  // Demo data state
+  const [demoStatus, setDemoStatus] = useState(null);
+  const [demoLoading, setDemoLoading] = useState(false);
+  const [demoMessage, setDemoMessage] = useState(null);
+  const [showDemoConfirm, setShowDemoConfirm] = useState(null); // 'load' | 'clear' | null
+
   // Shared props
   const [selectedContactId, setSelectedContactId] = useState(null);
   const [viewSearchQuery, setViewSearchQuery] = useState("");
@@ -47,14 +55,22 @@ export default function App() {
     setIsNotificationsOpen(false);
   };
 
-  const handleLoginSuccess = (userToken) => {
-    localStorage.setItem("crm-auth-token", userToken);
-    setToken(userToken);
+  const handleLoginSuccess = (data) => {
+    localStorage.setItem("crm-auth-token", data.token);
+    localStorage.setItem("crm-auth-role", data.role);
+    localStorage.setItem("crm-auth-username", data.username);
+    setToken(data.token);
+    setRole(data.role);
+    setUsername(data.username);
   };
 
   const handleLogout = () => {
     localStorage.removeItem("crm-auth-token");
+    localStorage.removeItem("crm-auth-role");
+    localStorage.removeItem("crm-auth-username");
     setToken(null);
+    setRole(null);
+    setUsername(null);
   };
 
   const fetchNotifications = async () => {
@@ -71,9 +87,73 @@ export default function App() {
     }
   };
 
+  const fetchDemoStatus = async () => {
+    try {
+      const res = await fetch("/api/demo/status");
+      if (res.ok) {
+        const data = await res.json();
+        setDemoStatus(data);
+      }
+    } catch (err) {
+      console.error("Failed to load demo status", err);
+    }
+  };
+
+  const handleLoadDemoData = async () => {
+    setDemoLoading(true);
+    setDemoMessage(null);
+    setShowDemoConfirm(null);
+    try {
+      const res = await fetch("/api/demo/load", { method: "POST" });
+      const data = await res.json();
+      if (data.success) {
+        setDemoMessage({ type: "success", text: `Demo loaded! ${data.counts.contacts} contacts, ${data.counts.deals} deals, ${data.counts.activities} activities, ${data.counts.tickets} tickets.` });
+        fetchDemoStatus();
+        fetchNotifications();
+        // Force re-render of active view by toggling tab
+        const current = activeTab;
+        setActiveTab("");
+        setTimeout(() => setActiveTab(current), 50);
+      } else {
+        setDemoMessage({ type: "error", text: data.error || "Failed to load demo data" });
+      }
+    } catch (err) {
+      setDemoMessage({ type: "error", text: "Network error loading demo data" });
+    } finally {
+      setDemoLoading(false);
+      setTimeout(() => setDemoMessage(null), 5000);
+    }
+  };
+
+  const handleClearDemoData = async () => {
+    setDemoLoading(true);
+    setDemoMessage(null);
+    setShowDemoConfirm(null);
+    try {
+      const res = await fetch("/api/demo/clear", { method: "POST" });
+      const data = await res.json();
+      if (data.success) {
+        setDemoMessage({ type: "success", text: "All data cleared. CRM is empty and ready for real data." });
+        fetchDemoStatus();
+        fetchNotifications();
+        const current = activeTab;
+        setActiveTab("");
+        setTimeout(() => setActiveTab(current), 50);
+      } else {
+        setDemoMessage({ type: "error", text: data.error || "Failed to clear data" });
+      }
+    } catch (err) {
+      setDemoMessage({ type: "error", text: "Network error clearing data" });
+    } finally {
+      setDemoLoading(false);
+      setTimeout(() => setDemoMessage(null), 5000);
+    }
+  };
+
   useEffect(() => {
     if (token) {
       fetchNotifications();
+      fetchDemoStatus();
       const interval = setInterval(fetchNotifications, 30000);
       return () => clearInterval(interval);
     }
@@ -412,9 +492,20 @@ export default function App() {
     <div className="min-h-screen flex flex-col md:flex-row bg-[#0A0E1A] text-[#EAF0FB] font-sans antialiased">
       {/* Mobile Top Navbar Bar */}
       <div className="md:hidden flex items-center justify-between px-5 py-4 border-b border-brand-border bg-brand-surface/90 backdrop-blur-md sticky top-0 z-40">
-        <div className="flex items-center gap-2">
-          <div className="w-2.5 h-2.5 rounded-full bg-[#2DD4BF] pulse-dot" />
-          <span className="font-space font-bold tracking-tight text-sm uppercase">Quantum CRM</span>
+        <div className="flex flex-col">
+          <div className="flex items-center gap-2">
+            <div className="w-2.5 h-2.5 rounded-full bg-[#2DD4BF] pulse-dot" />
+            <span className="font-space font-bold tracking-tight text-sm uppercase">Apex CRM</span>
+          </div>
+          {role && (
+            <span className={`text-[8px] font-mono font-bold uppercase tracking-wide mt-0.5 align-middle self-start px-1.5 py-0.5 rounded border ${
+              role.toLowerCase() === "admin" ? "bg-brand-teal/10 text-brand-teal border-brand-teal/20" :
+              role.toLowerCase() === "agent" ? "bg-brand-orange/10 text-brand-orange border-brand-orange/20" :
+              "bg-[#818CF8]/15 text-[#818CF8] border-[#818CF8]/25"
+            }`}>
+              {role}
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-3">
           {/* Mobile Search Icon */}
@@ -486,12 +577,25 @@ export default function App() {
       {/* Desktop Navigation Left Sidebar */}
       <aside className="hidden md:flex flex-col w-64 bg-[#121829] border-r border-[#1F2A40] p-6 space-y-6 shrink-0">
         {/* Logo and Brand Title */}
-        <div className="flex items-center gap-2.5 px-2">
-          <div className="w-3.5 h-3.5 rounded-full bg-[#2DD4BF] pulse-dot" />
-          <div>
-            <h1 className="font-space font-bold text-md tracking-tight uppercase">Quantum CRM</h1>
-            <p className="text-[9px] text-[#7C8AA8] font-mono tracking-widest mt-0.5">LOCAL HOST COMMAND</p>
+        <div className="flex flex-col gap-2 px-2 pb-2 border-b border-[#1F2A40]">
+          <div className="flex items-center gap-2.5">
+            <div className="w-3.5 h-3.5 rounded-full bg-[#2DD4BF] pulse-dot" />
+            <div>
+              <h1 className="font-space font-bold text-md tracking-tight uppercase">Apex CRM</h1>
+              <p className="text-[9px] text-[#7C8AA8] font-mono tracking-widest mt-0.5">LOCAL HOST COMMAND</p>
+            </div>
           </div>
+          {role && (
+            <div className="flex items-center gap-2 mt-1">
+              <span className={`text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded-md border ${
+                role.toLowerCase() === "admin" ? "bg-brand-teal/10 text-brand-teal border-brand-teal/20" :
+                role.toLowerCase() === "agent" ? "bg-brand-orange/10 text-brand-orange border-brand-orange/20" :
+                "bg-[#818CF8]/15 text-[#818CF8] border-[#818CF8]/25"
+              }`}>
+                {role} Workspace
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Sidebar Nav Items */}
@@ -517,6 +621,105 @@ export default function App() {
             );
           })}
         </nav>
+
+        {/* Demo Data Controls */}
+        <div className="pt-3 border-t border-[#1F2A40] space-y-2">
+          <p className="text-[9px] font-mono font-bold uppercase tracking-widest text-brand-textDim px-1 flex items-center gap-1.5">
+            <Database size={10} /> Demo Data
+          </p>
+
+          {demoStatus && (
+            <div className="text-[9px] font-mono text-brand-textDim bg-brand-surfaceAlt/40 rounded-lg px-3 py-2 border border-brand-border/50">
+              <div className="grid grid-cols-2 gap-x-3 gap-y-0.5">
+                <span>Companies</span><span className="text-right text-brand-text">{demoStatus.counts.companies}</span>
+                <span>Contacts</span><span className="text-right text-brand-text">{demoStatus.counts.contacts}</span>
+                <span>Deals</span><span className="text-right text-brand-text">{demoStatus.counts.deals}</span>
+                <span>Activities</span><span className="text-right text-brand-text">{demoStatus.counts.activities}</span>
+                <span>Tickets</span><span className="text-right text-brand-text">{demoStatus.counts.tickets}</span>
+              </div>
+            </div>
+          )}
+
+          {/* Demo Message Toast */}
+          {demoMessage && (
+            <div className={`text-[10px] font-mono px-3 py-2 rounded-lg border flex items-start gap-2 animate-scaleIn ${
+              demoMessage.type === "success" 
+                ? "bg-brand-teal/10 border-brand-teal/25 text-brand-teal" 
+                : "bg-brand-red/10 border-brand-red/25 text-brand-red"
+            }`}>
+              {demoMessage.type === "success" ? <CheckCircle2 size={12} className="mt-0.5 shrink-0" /> : <AlertCircle size={12} className="mt-0.5 shrink-0" />}
+              <span>{demoMessage.text}</span>
+            </div>
+          )}
+
+          <div className="flex gap-2">
+            <button
+              onClick={() => setShowDemoConfirm("load")}
+              disabled={demoLoading}
+              className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl text-[10px] font-bold font-mono uppercase tracking-wide bg-brand-teal/10 text-brand-teal border border-brand-teal/25 hover:bg-brand-teal/20 hover:border-brand-teal/40 transition-all disabled:opacity-50"
+            >
+              {demoLoading ? <Loader2 size={12} className="animate-spin" /> : <PackagePlus size={12} />}
+              Load Demo
+            </button>
+            <button
+              onClick={() => setShowDemoConfirm("clear")}
+              disabled={demoLoading || !demoStatus?.hasData}
+              className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl text-[10px] font-bold font-mono uppercase tracking-wide bg-brand-red/10 text-brand-red/80 border border-brand-red/20 hover:bg-brand-red/15 hover:border-brand-red/35 hover:text-brand-red transition-all disabled:opacity-30"
+            >
+              <Trash2 size={12} />
+              Clear All
+            </button>
+          </div>
+        </div>
+
+        {/* Confirmation Modal */}
+        {showDemoConfirm && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-bg/85 backdrop-blur-sm" onClick={() => setShowDemoConfirm(null)}>
+            <div className="w-full max-w-sm mx-4 rounded-2xl border border-brand-border bg-brand-surface p-6 shadow-2xl animate-scaleIn space-y-4" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center gap-3">
+                <div className={`p-2 rounded-xl ${showDemoConfirm === "load" ? "bg-brand-teal/15" : "bg-brand-red/15"}`}>
+                  {showDemoConfirm === "load" 
+                    ? <PackagePlus size={20} className="text-brand-teal" />
+                    : <Trash2 size={20} className="text-brand-red" />
+                  }
+                </div>
+                <div>
+                  <h3 className="font-space font-bold text-brand-text text-sm">
+                    {showDemoConfirm === "load" ? "Load Demo Data" : "Clear All Data"}
+                  </h3>
+                  <p className="text-[10px] text-brand-textDim font-mono mt-0.5">
+                    {showDemoConfirm === "load" 
+                      ? "This will replace all existing data with realistic demo records." 
+                      : "This will permanently delete all business data (contacts, deals, tickets, etc.)."}
+                  </p>
+                </div>
+              </div>
+              <div className="text-[11px] text-brand-textDim bg-brand-surfaceAlt/60 rounded-xl p-3 border border-brand-border/50">
+                {showDemoConfirm === "load" 
+                  ? "8 companies • 15 contacts • 10 deals • 18 activities • 8 tickets will be created with realistic data."
+                  : "User accounts (admin, agent, support) will be preserved. Only business data will be removed."}
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowDemoConfirm(null)}
+                  className="flex-1 py-2.5 rounded-xl text-xs font-semibold text-brand-textDim border border-brand-border hover:bg-brand-surfaceAlt transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={showDemoConfirm === "load" ? handleLoadDemoData : handleClearDemoData}
+                  className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all ${
+                    showDemoConfirm === "load"
+                      ? "bg-brand-teal text-[#0A0E1A] hover:brightness-110 shadow-lg shadow-brand-teal/20"
+                      : "bg-brand-red text-white hover:brightness-110 shadow-lg shadow-brand-red/20"
+                  }`}
+                >
+                  {showDemoConfirm === "load" ? "Load Demo Data" : "Clear All Data"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Sign Out Button */}
         <button 

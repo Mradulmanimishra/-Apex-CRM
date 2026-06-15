@@ -1,8 +1,5 @@
 {
-  "appId": "com.quantum.crm",
-  "appName": "Quantum CRM",
-  "webDir": "dist",
-  "server": {
-    "androidScheme": "https"
-  }
+  "appId": "com.apex.crm",
+  "appName": "Apex CRM",
+  "webDir": "dist"
 }

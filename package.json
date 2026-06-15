@@ -10,6 +10,10 @@
     "dev": "concurrently --kill-others-on-fail \"npm run dev --prefix backend\" \"npm run dev --prefix frontend\""
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.4.0",
     "concurrently": "^8.2.2"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.4.0"
   }
 }

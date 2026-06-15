@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { 
   Plus, Search, Edit2, Trash2, X, Building, Mail, Phone, Tag, 
-  Layers, CheckCircle, HelpCircle, FileText, AlertCircle, Calendar, PlusCircle, Download
+  Layers, CheckCircle, HelpCircle, FileText, AlertCircle, Calendar, PlusCircle, Download, Upload
 } from "lucide-react";
 
 const palette = {
@@ -25,6 +25,8 @@ export default function ContactsView({ initialSelectedContactId }) {
   const [companies, setCompanies] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  
+  const fileInputRef = React.useRef(null);
 
   // Search & Filtering
   const [searchQuery, setSearchQuery] = useState("");
@@ -200,10 +202,103 @@ export default function ContactsView({ initialSelectedContactId }) {
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `quantum_crm_contacts_${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute("download", `apex_crm_contacts_${new Date().toISOString().split('T')[0]}.csv`);
     document.body.appendChild(link);
     link.click();
-    document.body.removeChild(link);
+  };
+
+  const triggerCSVImport = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  };
+
+  const parseCSVText = (text) => {
+    const lines = [];
+    let row = [""];
+    let inQuotes = false;
+
+    for (let i = 0; i < text.length; i++) {
+      const c = text[i];
+      const next = text[i + 1];
+
+      if (c === '"') {
+        if (inQuotes && next === '"') {
+          row[row.length - 1] += '"';
+          i++;
+        } else {
+          inQuotes = !inQuotes;
+        }
+      } else if (c === ',' && !inQuotes) {
+        row.push("");
+      } else if ((c === '\r' || c === '\n') && !inQuotes) {
+        if (c === '\r' && next === '\n') {
+          i++;
+        }
+        lines.push(row);
+        row = [""];
+      } else {
+        row[row.length - 1] += c;
+      }
+    }
+    if (row.length > 1 || row[0] !== "") {
+      lines.push(row);
+    }
+
+    if (lines.length === 0) return [];
+
+    const headers = lines[0].map(h => h.trim().replace(/^"|"$/g, ''));
+    const dataRows = lines.slice(1);
+
+    return dataRows
+      .map(r => {
+        const obj = {};
+        headers.forEach((h, index) => {
+          let val = r[index] ? r[index].trim() : "";
+          if (val.startsWith('"') && val.endsWith('"')) {
+            val = val.substring(1, val.length - 1).replace(/""/g, '"');
+          }
+          obj[h] = val;
+        });
+        return obj;
+      })
+      .filter(obj => obj.Name || obj.name);
+  };
+
+  const handleImportCSV = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const text = event.target.result;
+        const parsedData = parseCSVText(text);
+        if (parsedData.length === 0) {
+          throw new Error("No records found in CSV file. Ensure columns have a header name 'Name' or 'name'.");
+        }
+
+        const confirmMsg = `Discovered ${parsedData.length} contacts. Proceed to import into database?`;
+        if (!confirm(confirmMsg)) return;
+
+        const res = await fetch("/api/contacts/import", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(parsedData)
+        });
+
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Failed to import contacts");
+
+        alert(`Successfully imported ${data.count} contacts!`);
+        fetchData();
+      } catch (err) {
+        alert("Import failed: " + err.message);
+      } finally {
+        e.target.value = "";
+      }
+    };
+    reader.readAsText(file);
   };
 
   // Filter logic
@@ -249,6 +344,19 @@ export default function ContactsView({ initialSelectedContactId }) {
           <p className="text-xs text-brand-textDim mt-0.5">Manage details and customer relationship structures</p>
         </div>
         <div className="flex items-center gap-3">
+          <input 
+            type="file" 
+            ref={fileInputRef} 
+            accept=".csv" 
+            onChange={handleImportCSV} 
+            className="hidden" 
+          />
+          <button 
+            onClick={triggerCSVImport}
+            className="flex items-center gap-1.5 px-4 py-2 border border-brand-border bg-brand-surfaceAlt/60 text-brand-text font-semibold text-xs rounded-xl hover:border-brand-teal/40 transition-colors animate-pulse-slow"
+          >
+            <Upload size={14} className="text-brand-teal" /> IMPORT CSV
+          </button>
           <button 
             onClick={handleExportCSV}
             className="flex items-center gap-1.5 px-4 py-2 border border-brand-border bg-brand-surfaceAlt/60 text-brand-text font-semibold text-xs rounded-xl hover:border-brand-teal/40 transition-colors"

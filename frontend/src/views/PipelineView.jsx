@@ -179,7 +179,7 @@ export default function PipelineView({ initialSearchQuery = "" }) {
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `quantum_crm_deals_${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute("download", `apex_crm_deals_${new Date().toISOString().split('T')[0]}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);

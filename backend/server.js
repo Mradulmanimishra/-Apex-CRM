@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
@@ -7,13 +8,18 @@ const routes = require('./routes');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Enable CORS for frontend development server
+// Enable CORS using configuration or defaults
+const allowedOrigins = process.env.CORS_ORIGIN 
+  ? process.env.CORS_ORIGIN.split(',') 
+  : ['http://localhost:5173', 'http://127.0.0.1:5173'];
+
 app.use(cors({
-  origin: ['http://localhost:5173', 'http://127.0.0.1:5173'],
+  origin: allowedOrigins,
   credentials: true
 }));
 
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 // Wire api routes
 app.use('/api', routes);
@@ -29,6 +35,17 @@ if (process.env.NODE_ENV === 'production') {
     res.send('CRM backend is running. API endpoints at /api/...');
   });
 }
+
+// Global Error Handler Middleware
+app.use((err, req, res, next) => {
+  console.error('Unhandled Application Error:', err);
+  res.status(err.status || 500).json({
+    success: false,
+    error: process.env.NODE_ENV === 'production' 
+      ? 'An unexpected database or application error occurred.' 
+      : err.message
+  });
+});
 
 // Start database then start listener
 initDatabase().then(() => {

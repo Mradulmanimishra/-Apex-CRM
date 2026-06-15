@@ -1,1 +1,22 @@
 node_modules
+dist
+
+# Environment & secrets
+.env
+.env.*
+!.env.example
+
+# Database
+*.db
+*.db-journal
+
+# Build artifacts
+*.apk
+
+# IDE & OS
+.vscode
+.idea
+*.swp
+*.swo
+.DS_Store
+Thumbs.db

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
+  PieChart, Pie, Cell, Legend, BarChart, Bar
 } from "recharts";
 import {
   Wallet, Target, TrendingUp, Users, Ticket, ArrowUpRight, ArrowDownRight,
@@ -19,6 +20,8 @@ const palette = {
   warn: "#FB923C",
   danger: "#F87171",
 };
+
+const COLORS = ["#2DD4BF", "#818CF8", "#FB923C", "#F87171", "#C084FC", "#FBBF24", "#F43F5E", "#10B981"];
 
 const activityIcons = {
   Call: Phone, Email: Mail, Meeting: Calendar, Demo: Video, Note: FileText, 'WhatsApp Message': MessageCircle,
@@ -60,11 +63,13 @@ export default function DashboardView({ onNavigate }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [simulating, setSimulating] = useState(false);
+  const [simulatorToast, setSimulatorToast] = useState(null); // { type: 'success'|'error', text: string }
 
   // Filters and Interactive Chart Toggles
   const [selectedOwner, setSelectedOwner] = useState("All");
   const [showPipeline, setShowPipeline] = useState(true);
   const [showWon, setShowWon] = useState(true);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
 
   // Pre-configured owners list
   const owners = ["All", "Priya Nair", "Vikram Singh", "Aarav Mehta"];
@@ -93,15 +98,17 @@ export default function DashboardView({ onNavigate }) {
   const handleTriggerSimulator = async () => {
     try {
       setSimulating(true);
+      setSimulatorToast(null);
       const res = await fetch("/api/simulator/whatsapp", { method: "POST" });
       if (!res.ok) throw new Error("Simulation failed");
       const json = await res.json();
-      alert(`Simulation Success!\n${json.message}`);
+      setSimulatorToast({ type: "success", text: json.message });
       fetchDashboardData(selectedOwner);
     } catch (err) {
-      alert(`Simulation failed: ${err.message}`);
+      setSimulatorToast({ type: "error", text: `Simulation failed: ${err.message}` });
     } finally {
       setSimulating(false);
+      setTimeout(() => setSimulatorToast(null), 4000);
     }
   };
 
@@ -130,7 +137,7 @@ export default function DashboardView({ onNavigate }) {
     );
   }
 
-  const { metrics, funnel, revenueTrend, upcomingFollowups, ticketPriorities } = data;
+  const { metrics, funnel, revenueTrend, upcomingFollowups, ticketPriorities, lostReasonStats, ticketStatusStats, leadSourceStats } = data;
   const maxFunnelValue = Math.max(...funnel.map((f) => f.value), 1);
 
   const kpis = [
@@ -145,6 +152,18 @@ export default function DashboardView({ onNavigate }) {
 
   return (
     <div className="space-y-8 animate-fadeIn">
+      {/* Simulator Toast Notification */}
+      {simulatorToast && (
+        <div className={`fixed top-6 right-6 z-50 flex items-center gap-2.5 px-5 py-3 rounded-2xl border shadow-2xl animate-scaleIn text-xs font-mono ${
+          simulatorToast.type === "success"
+            ? "bg-brand-surface border-brand-teal/30 text-brand-teal"
+            : "bg-brand-surface border-brand-red/30 text-brand-red"
+        }`}>
+          <span className={`w-2 h-2 rounded-full animate-pulse ${simulatorToast.type === "success" ? "bg-brand-teal" : "bg-brand-red"}`} />
+          <span>{simulatorToast.text}</span>
+          <button onClick={() => setSimulatorToast(null)} className="ml-2 text-brand-textDim hover:text-brand-text">✕</button>
+        </div>
+      )}
       {/* Header toolbar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-brand-border/60 pb-6">
         <div>
@@ -198,6 +217,170 @@ export default function DashboardView({ onNavigate }) {
         {kpis.map((k) => (
           <KpiCard key={k.label} label={k.label} value={k.value} icon={k.icon} color={k.color} details={k.details} />
         ))}
+      </div>
+
+      {/* Collapsible Advanced Analytics Section */}
+      <div className="rounded-2xl border border-brand-border bg-brand-surface/40 hover:bg-brand-surface/65 backdrop-blur-md transition-all duration-300">
+        <button
+          onClick={() => setAdvancedOpen(!advancedOpen)}
+          className="w-full flex items-center justify-between p-5 text-left focus:outline-none"
+        >
+          <div className="flex items-center gap-3">
+            <div className="rounded-lg p-2 bg-brand-teal/10 border border-brand-teal/20 text-brand-teal">
+              <TrendingUp size={16} />
+            </div>
+            <div>
+              <h2 className="text-sm font-bold uppercase tracking-wider text-brand-text font-space">
+                Advanced Analytical Reports
+              </h2>
+              <p className="text-[10px] text-brand-textDim mt-0.5 font-mono">
+                DEALS LOST REASONS, TICKET STATUS BREAKDOWNS, AND LEAD ACQUISITION SOURCES
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className={`px-2 py-0.5 rounded text-[9px] font-mono font-bold ${
+              advancedOpen ? "bg-brand-teal/20 text-brand-teal border border-brand-teal/30" : "bg-brand-surfaceAlt border border-brand-border text-brand-textDim"
+            }`}>
+              {advancedOpen ? "ACTIVE" : "COLLAPSED"}
+            </span>
+            <span className={`transition-transform duration-300 transform ${advancedOpen ? "rotate-180" : ""}`}>
+              ▼
+            </span>
+          </div>
+        </button>
+
+        {advancedOpen && (
+          <div className="p-6 border-t border-brand-border/60 grid grid-cols-1 md:grid-cols-3 gap-6 animate-fadeIn">
+            
+            {/* Chart 1: Lost Reasons Pie Chart */}
+            <div className="rounded-xl border border-brand-border bg-brand-surfaceAlt/40 p-4 flex flex-col justify-between h-[300px]">
+              <div>
+                <h3 className="text-xs font-bold uppercase tracking-wider text-brand-textDim font-space mb-2">
+                  Deals: Lost Reasons
+                </h3>
+                <p className="text-[10px] text-brand-textDim/70 font-mono mb-4">
+                  Breakdown of lost deal factors
+                </p>
+              </div>
+              <div className="flex-1 min-h-0 relative flex items-center justify-center">
+                {lostReasonStats && lostReasonStats.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={lostReasonStats.map(item => ({ name: item.lost_reason, value: item.count }))}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={0}
+                        outerRadius={70}
+                        paddingAngle={2}
+                        dataKey="value"
+                      >
+                        {lostReasonStats.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        contentStyle={{ background: palette.surfaceAlt, border: `1px solid ${palette.border}`, borderRadius: 10, fontSize: 10, fontFamily: "Inter" }}
+                        itemStyle={{ color: palette.text }}
+                      />
+                      <Legend 
+                        verticalAlign="bottom" 
+                        height={36} 
+                        iconSize={8}
+                        iconType="circle"
+                        wrapperStyle={{ fontSize: 9, fontFamily: "JetBrains Mono", color: palette.textDim }}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <span className="text-[11px] text-brand-textDim italic font-mono">No lost deal metrics logged</span>
+                )}
+              </div>
+            </div>
+
+            {/* Chart 2: Support Tickets Bar Chart */}
+            <div className="rounded-xl border border-brand-border bg-brand-surfaceAlt/40 p-4 flex flex-col justify-between h-[300px]">
+              <div>
+                <h3 className="text-xs font-bold uppercase tracking-wider text-brand-textDim font-space mb-2">
+                  Support Tickets Distribution
+                </h3>
+                <p className="text-[10px] text-brand-textDim/70 font-mono mb-4">
+                  Case counts grouped by workflow state
+                </p>
+              </div>
+              <div className="flex-1 min-h-0 relative">
+                {ticketStatusStats && ticketStatusStats.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={ticketStatusStats.map(item => ({ name: item.status, count: item.count }))} margin={{ top: 5, right: 5, left: -25, bottom: 5 }}>
+                      <CartesianGrid stroke={palette.border} strokeDasharray="3 6" vertical={false} />
+                      <XAxis dataKey="name" tick={{ fill: palette.textDim, fontSize: 9, fontFamily: "Inter" }} axisLine={{ stroke: palette.border }} tickLine={false} />
+                      <YAxis allowDecimals={false} tick={{ fill: palette.textDim, fontSize: 9, fontFamily: "JetBrains Mono" }} axisLine={false} tickLine={false} />
+                      <Tooltip
+                        contentStyle={{ background: palette.surfaceAlt, border: `1px solid ${palette.border}`, borderRadius: 10, fontSize: 10, fontFamily: "Inter" }}
+                        itemStyle={{ color: palette.text }}
+                      />
+                      <Bar dataKey="count" radius={[4, 4, 0, 0]}>
+                        {ticketStatusStats.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={COLORS[(index + 1) % COLORS.length]} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <span className="text-[11px] text-brand-textDim italic font-mono flex items-center justify-center h-full">No tickets data logged</span>
+                )}
+              </div>
+            </div>
+
+            {/* Chart 3: Lead Sources Donut Chart */}
+            <div className="rounded-xl border border-brand-border bg-brand-surfaceAlt/40 p-4 flex flex-col justify-between h-[300px]">
+              <div>
+                <h3 className="text-xs font-bold uppercase tracking-wider text-brand-textDim font-space mb-2">
+                  Lead Acquisition Sources
+                </h3>
+                <p className="text-[10px] text-brand-textDim/70 font-mono mb-4">
+                  Contacts lead channels distribution
+                </p>
+              </div>
+              <div className="flex-1 min-h-0 relative flex items-center justify-center">
+                {leadSourceStats && leadSourceStats.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={leadSourceStats.map(item => ({ name: item.source || "Unknown", value: item.count }))}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={45}
+                        outerRadius={65}
+                        paddingAngle={3}
+                        dataKey="value"
+                      >
+                        {leadSourceStats.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={COLORS[(index + 2) % COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        contentStyle={{ background: palette.surfaceAlt, border: `1px solid ${palette.border}`, borderRadius: 10, fontSize: 10, fontFamily: "Inter" }}
+                        itemStyle={{ color: palette.text }}
+                      />
+                      <Legend 
+                        verticalAlign="bottom" 
+                        height={36} 
+                        iconSize={8}
+                        iconType="circle"
+                        wrapperStyle={{ fontSize: 9, fontFamily: "JetBrains Mono", color: palette.textDim }}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <span className="text-[11px] text-brand-textDim italic font-mono">No lead source metrics logged</span>
+                )}
+              </div>
+            </div>
+
+          </div>
+        )}
       </div>
 
       {/* Funnel + Trend */}
