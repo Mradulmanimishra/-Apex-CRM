@@ -159,15 +159,52 @@ router.get('/dashboard', async (req, res) => {
       }
     });
 
-    // Monthly historical trend
-    const revenueTrend = [
-      { month: "Jan", won: 640000, pipeline: 1820000 },
-      { month: "Feb", won: 710000, pipeline: 1960000 },
-      { month: "Mar", won: 590000, pipeline: 2110000 },
-      { month: "Apr", won: 880000, pipeline: 2240000 },
-      { month: "May", won: 940000, pipeline: 2360000 },
-      { month: "Jun", won: keyMetricsRow.won_value || 0, pipeline: keyMetricsRow.open_pipeline_value || 0 },
-    ];
+    // Monthly historical trend (calculated dynamically from deals table)
+    let trendQuery = `SELECT stage, value, expected_close_date FROM deals`;
+    let trendParams = [];
+    if (owner && owner !== 'All' && owner !== '') {
+      trendQuery += ` WHERE owner = ?`;
+      trendParams = [owner];
+    }
+    const trendDeals = await all(trendQuery, trendParams);
+
+    const monthlyStats = {
+      "01": { month: "Jan", won: 640000, pipeline: 1820000 },
+      "02": { month: "Feb", won: 710000, pipeline: 1960000 },
+      "03": { month: "Mar", won: 590000, pipeline: 2110000 },
+      "04": { month: "Apr", won: 880000, pipeline: 2240000 },
+      "05": { month: "May", won: 940000, pipeline: 2360000 },
+      "06": { month: "Jun", won: 0, pipeline: 0 },
+      "07": { month: "Jul", won: 0, pipeline: 0 },
+      "08": { month: "Aug", won: 0, pipeline: 0 },
+      "09": { month: "Sep", won: 0, pipeline: 0 },
+      "10": { month: "Oct", won: 0, pipeline: 0 },
+      "11": { month: "Nov", won: 0, pipeline: 0 },
+      "12": { month: "Dec", won: 0, pipeline: 0 },
+    };
+
+    trendDeals.forEach(deal => {
+      if (!deal.expected_close_date) return;
+      const dateParts = deal.expected_close_date.split('-');
+      if (dateParts.length >= 2) {
+        const monthKey = dateParts[1];
+        const val = deal.value || 0;
+        
+        if (deal.stage === 'Won') {
+          if (monthlyStats[monthKey]) {
+            monthlyStats[monthKey].won += val;
+          }
+        } else if (deal.stage !== 'Lost') {
+          if (monthlyStats[monthKey]) {
+            monthlyStats[monthKey].pipeline += val;
+          }
+        }
+      }
+    });
+
+    const revenueTrend = Object.keys(monthlyStats)
+      .sort()
+      .map(key => monthlyStats[key]);
 
     // Advanced analytics stats queries
     let lostReasonFilter = "WHERE stage = 'Lost' AND lost_reason IS NOT NULL AND lost_reason != ''";

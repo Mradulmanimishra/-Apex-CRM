@@ -28,9 +28,9 @@ const activityIcons = {
 };
 
 const fmtMoney = (n) => {
-  if (n >= 1000000) return `$${(n / 1000000).toFixed(2)}M`;
-  if (n >= 1000) return `$${(n / 1000).toFixed(0)}K`;
-  return `$${n}`;
+  if (n >= 1000000) return `₹${(n / 1000000).toFixed(2)}M`;
+  if (n >= 1000) return `₹${(n / 1000).toFixed(0)}K`;
+  return `₹${n}`;
 };
 
 function KpiCard({ label, value, icon: Icon, color, details }) {

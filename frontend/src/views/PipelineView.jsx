@@ -322,11 +322,11 @@ export default function PipelineView({ initialSearchQuery = "" }) {
         </div>
         <div className="flex flex-col justify-center px-4">
           <span className="text-[10px] uppercase text-brand-textDim tracking-wider">Total Value</span>
-          <span className="text-lg font-bold font-mono text-brand-text">${totalValue.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0})}</span>
+          <span className="text-lg font-bold font-mono text-brand-text">₹{totalValue.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0})}</span>
         </div>
         <div className="flex flex-col justify-center px-4 border-l border-brand-border">
           <span className="text-[10px] uppercase text-brand-textDim tracking-wider">Weighted Forecast</span>
-          <span className="text-lg font-bold font-mono text-brand-teal">${weightedValue.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0})}</span>
+          <span className="text-lg font-bold font-mono text-brand-teal">₹{weightedValue.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0})}</span>
         </div>
       </div>
 
@@ -348,7 +348,7 @@ export default function PipelineView({ initialSearchQuery = "" }) {
                 <div className="flex items-center justify-between mb-4 border-b border-brand-border pb-2">
                   <div>
                     <h3 className="text-xs font-bold text-brand-text uppercase">{stage}</h3>
-                    <p className="text-[10px] text-brand-textDim font-mono mt-0.5">${stageTotal.toLocaleString(undefined, {maximumFractionDigits: 0})}</p>
+                    <p className="text-[10px] text-brand-textDim font-mono mt-0.5">₹{stageTotal.toLocaleString(undefined, {maximumFractionDigits: 0})}</p>
                   </div>
                   <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-brand-surface text-brand-text border border-brand-border">
                     {stageDeals.length}
@@ -373,7 +373,7 @@ export default function PipelineView({ initialSearchQuery = "" }) {
                       </div>
 
                       <div className="flex justify-between items-center text-[10px]">
-                        <span className="font-bold font-mono text-brand-text">${(deal.value).toLocaleString(undefined, {maximumFractionDigits:0})}</span>
+                        <span className="font-bold font-mono text-brand-text">₹{(deal.value).toLocaleString(undefined, {maximumFractionDigits:0})}</span>
                         <span className="px-1.5 py-0.2 rounded font-mono bg-brand-surfaceAlt border border-brand-border text-brand-textDim text-[9px]">
                           {Math.round(deal.probability * 100)}%
                         </span>
@@ -446,9 +446,9 @@ export default function PipelineView({ initialSearchQuery = "" }) {
                           {d.stage}
                         </span>
                       </td>
-                      <td className="p-4 font-bold font-mono">${(d.value).toLocaleString()}</td>
+                      <td className="p-4 font-bold font-mono">₹{(d.value).toLocaleString()}</td>
                       <td className="p-4 font-mono text-brand-textDim">{Math.round(d.probability * 100)}%</td>
-                      <td className="p-4 font-bold font-mono text-brand-teal">${(d.value * d.probability).toLocaleString(undefined, {maximumFractionDigits:0})}</td>
+                      <td className="p-4 font-bold font-mono text-brand-teal">₹{(d.value * d.probability).toLocaleString(undefined, {maximumFractionDigits:0})}</td>
                       <td className="p-4 font-mono text-brand-textDim">{d.expected_close_date || "-"}</td>
                       <td className="p-4 text-brand-textDim">{d.owner || "-"}</td>
                       <td className="p-4 text-right" onClick={e => e.stopPropagation()}>
@@ -551,7 +551,7 @@ export default function PipelineView({ initialSearchQuery = "" }) {
                   </select>
                 </div>
                 <div className="space-y-1">
-                  <label className="text-[10px] uppercase text-brand-textDim font-semibold">Deal Value ($)</label>
+                  <label className="text-[10px] uppercase text-brand-textDim font-semibold">Deal Value (₹)</label>
                   <input 
                     type="number" 
                     value={formValue}

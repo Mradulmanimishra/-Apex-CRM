@@ -4,16 +4,23 @@ const crypto = require('crypto');
 
 const dbPath = path.join(__dirname, 'crm.db');
 
+const HASH_ITERATIONS = 210000;
+
 function hashPassword(password) {
   const salt = crypto.randomBytes(16).toString('hex');
-  const hash = crypto.pbkdf2Sync(password, salt, 1000, 64, 'sha512').toString('hex');
+  const hash = crypto.pbkdf2Sync(password, salt, HASH_ITERATIONS, 64, 'sha512').toString('hex');
   return `${salt}:${hash}`;
 }
 
 function verifyPassword(password, storedHash) {
   try {
     const [salt, hash] = storedHash.split(':');
-    const checkHash = crypto.pbkdf2Sync(password, salt, 1000, 64, 'sha512').toString('hex');
+    // Try with the secure iteration count first
+    let checkHash = crypto.pbkdf2Sync(password, salt, HASH_ITERATIONS, 64, 'sha512').toString('hex');
+    if (hash === checkHash) return true;
+    
+    // Fallback to legacy count for backward compatibility
+    checkHash = crypto.pbkdf2Sync(password, salt, 1000, 64, 'sha512').toString('hex');
     return hash === checkHash;
   } catch (err) {
     return false;
